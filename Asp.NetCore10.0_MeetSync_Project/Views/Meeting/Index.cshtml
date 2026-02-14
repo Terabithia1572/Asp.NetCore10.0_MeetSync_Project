@@ -2,50 +2,57 @@
     var roomName = ViewBag.RoomName as string;
 }
 
-<div class="h-screen bg-slate-950 text-white flex flex-col">
+<div class="h-screen bg-[#0f172a] text-white flex flex-col">
 
-    <!-- Top Bar -->
-    <div class="flex items-center justify-between px-6 py-3 bg-slate-900 border-b border-slate-800">
-        <h2 class="font-semibold">Oda: @roomName</h2>
+    <!-- TOP BAR -->
+    <div class="flex items-center justify-between px-6 py-3 bg-[#020617] border-b border-slate-800">
+        <div class="flex items-center gap-3">
+            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <h2 class="font-semibold text-lg">Oda: @roomName</h2>
+        </div>
         <span class="text-sm text-slate-400">Bağlı</span>
     </div>
 
-    <!-- Main Content -->
+    <!-- MAIN -->
     <div class="flex flex-1 overflow-hidden">
 
-        <!-- Video Grid -->
-        <div class="flex-1 p-4 grid grid-cols-2 gap-4">
+        <!-- VIDEO AREA -->
+        <div class="flex-1 bg-[#020617] p-4 grid grid-cols-2 gap-4">
 
-            <div class="bg-black rounded-xl flex items-center justify-center">
-                <span class="text-slate-400">Video 1</span>
+            <!-- LOCAL -->
+            <div class="relative bg-black rounded-2xl overflow-hidden shadow-lg">
+                <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <span class="absolute bottom-2 left-2 text-xs bg-black/60 px-2 py-1 rounded">Sen</span>
             </div>
 
-            <div class="bg-black rounded-xl flex items-center justify-center">
-                <span class="text-slate-400">Video 2</span>
+            <!-- REMOTE -->
+            <div class="relative bg-black rounded-2xl overflow-hidden shadow-lg">
+                <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                <span class="absolute bottom-2 left-2 text-xs bg-black/60 px-2 py-1 rounded">Katılımcı</span>
             </div>
 
         </div>
 
-        <!-- Side Panel -->
-        <div class="w-80 bg-slate-900 border-l border-slate-800 flex flex-col">
+        <!-- RIGHT PANEL -->
+        <div class="w-80 bg-[#020617] border-l border-slate-800 flex flex-col">
 
-            <!-- Participants -->
+            <!-- PARTICIPANTS -->
             <div class="p-4 border-b border-slate-800">
-                <h3 class="font-semibold mb-2">Katılımcılar</h3>
-                <ul class="space-y-1 text-sm text-slate-300">
-                    <li>Sen</li>
+                <h3 class="font-semibold mb-3">Katılımcılar</h3>
+                <ul id="participants" class="space-y-2 text-sm text-slate-300">
+                    <li class="bg-slate-800 px-3 py-2 rounded-lg">Sen</li>
                 </ul>
             </div>
 
-            <!-- Chat -->
+            <!-- CHAT -->
             <div class="flex-1 p-4 overflow-y-auto">
-                <h3 class="font-semibold mb-2">Chat</h3>
+                <h3 class="font-semibold mb-3">Sohbet</h3>
                 <div id="chatMessages" class="space-y-2 text-sm text-slate-300"></div>
             </div>
 
             <div class="p-3 border-t border-slate-800">
                 <input id="chatInput"
-                       class="w-full p-2 rounded bg-slate-800 border border-slate-700"
+                       class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none"
                        placeholder="Mesaj yaz..." />
             </div>
 
@@ -53,20 +60,24 @@
 
     </div>
 
-    <!-- Bottom Controls -->
-    <div class="bg-slate-900 border-t border-slate-800 py-3 flex justify-center gap-4">
+    <!-- CONTROL BAR -->
+    <div class="bg-[#020617] border-t border-slate-800 py-4 flex justify-center gap-6">
 
-        <button class="px-4 py-2 bg-slate-700 rounded-lg">🎤</button>
-        <button class="px-4 py-2 bg-slate-700 rounded-lg">📷</button>
-        <button class="px-4 py-2 bg-red-600 rounded-lg"
+        <button class="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-full text-xl">🎤</button>
+        <button class="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-full text-xl">📷</button>
+
+        <button class="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-full font-semibold"
                 onclick="window.location='/Dashboard'">
-            Çık
+            Toplantıdan Çık
         </button>
 
     </div>
 
 </div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+<script src="~/js/meeting.js"></script>
+
 
 <script>
     const roomName = "@roomName";
@@ -76,9 +87,18 @@
         .withUrl("/meetingHub")
         .build();
 
-    connection.start().then(() => {
-        connection.invoke("JoinRoom", roomName, userName);
+    connection.start().then(async () => {
+
+    await startMedia();
+
+    connection.invoke("JoinRoom", roomName, userName);
+
+    // odaya giren ilk kişi offer oluşturur
+    setTimeout(() => {
+    createOffer();
+    }, 1000);
     });
+
 
     connection.on("UserJoined", user => {
         const el = document.createElement("div");
@@ -99,4 +119,74 @@
                 this.value = "";
             }
         });
+
+    let localStream;
+    let peerConnection;
+
+    const servers = {
+    iceServers: [
+    { urls: "stun:stun.l.google.com:19302" }
+    ]
+    };
+
+    async function startMedia() {
+    localStream = await navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: true
+    });
+
+    document.getElementById("localVideo").srcObject = localStream;
+    }
+
+    function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(servers);
+
+    localStream.getTracks().forEach(track => {
+    peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.ontrack = event => {
+    document.getElementById("remoteVideo").srcObject = event.streams[0];
+    };
+
+    peerConnection.onicecandidate = event => {
+    if (event.candidate) {
+    connection.invoke("SendIceCandidate", roomName, JSON.stringify(event.candidate));
+    }
+    };
+    }
+    async function createOffer() {
+    createPeerConnection();
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    connection.invoke("SendOffer", roomName, JSON.stringify(offer));
+    }
+
+    connection.on("ReceiveOffer", async offer => {
+    createPeerConnection();
+
+    await peerConnection.setRemoteDescription(
+    new RTCSessionDescription(JSON.parse(offer))
+    );
+
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+
+    connection.invoke("SendAnswer", roomName, JSON.stringify(answer));
+    });
+
+    connection.on("ReceiveAnswer", async answer => {
+    await peerConnection.setRemoteDescription(
+    new RTCSessionDescription(JSON.parse(answer))
+    );
+    });
+
+    connection.on("ReceiveIceCandidate", async candidate => {
+    await peerConnection.addIceCandidate(
+    new RTCIceCandidate(JSON.parse(candidate))
+    );
+    });
+
 </script>

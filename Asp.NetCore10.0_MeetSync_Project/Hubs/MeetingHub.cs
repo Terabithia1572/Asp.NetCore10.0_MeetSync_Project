@@ -31,5 +31,23 @@ namespace Asp.NetCore10._0_MeetSync_Project.Hubs
             // later participant tracking eklenecek
             await base.OnDisconnectedAsync(exception);
         }
+        public async Task SendOffer(string room, string offer)
+        {
+            await Clients.OthersInGroup(room)
+                .SendAsync("ReceiveOffer", offer);
+        }
+
+        public async Task SendAnswer(string room, string answer)
+        {
+            await Clients.OthersInGroup(room)
+                .SendAsync("ReceiveAnswer", answer);
+        }
+
+        public async Task SendIceCandidate(string room, string candidate)
+        {
+            await Clients.OthersInGroup(room)
+                .SendAsync("ReceiveIceCandidate", candidate);
+        }
+
     }
 }
