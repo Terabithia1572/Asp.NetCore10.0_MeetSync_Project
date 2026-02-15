@@ -10,6 +10,8 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<MeetSyncDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddSignalR();
+builder.Services.AddSession();
+
 
 var app = builder.Build();
 
@@ -34,6 +36,7 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 app.MapHub<MeetingHub>("/meetingHub");
+app.UseSession();
 
 
 app.Run();
