@@ -9,6 +9,18 @@
 
   <ItemGroup>
     <Folder Include="Controllers\" />
+    <Folder Include="Hubs\" />
+    <Folder Include="wwwroot\js\webrtc\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.9" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MeetSync.Application\MeetSync.Application.csproj" />
+    <ProjectReference Include="..\MeetSync.Infrastructure\MeetSync.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

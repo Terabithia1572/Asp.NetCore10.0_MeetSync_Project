@@ -1,3 +1,6 @@
 <Solution>
   <Project Path="Asp.NetCore10.0_MeetSync_Project/Asp.NetCore10.0_MeetSync_Project.csproj" />
+  <Project Path="MeetSync.Application/MeetSync.Application.csproj" />
+  <Project Path="MeetSync.Domain/MeetSync.Domain.csproj" />
+  <Project Path="MeetSync.Infrastructure/MeetSync.Infrastructure.csproj" />
 </Solution>
