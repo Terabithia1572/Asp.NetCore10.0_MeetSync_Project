@@ -20,7 +20,7 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
             {
                 Id = Guid.NewGuid(),
                 Name = name,
-                CreatedBy = Guid.NewGuid() // şimdilik mock user
+                CreatedBy = Guid.NewGuid()
             };
 
             _context.Rooms.Add(room);
@@ -36,5 +36,4 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
             return View();
         }
     }
-
 }

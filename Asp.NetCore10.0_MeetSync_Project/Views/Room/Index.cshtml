@@ -1,5 +1,70 @@
 ﻿@{
-    ViewData["Title"] = "Room";
+    ViewData["Title"] = "Meeting Room";
+    var roomId = ViewBag.RoomId;
 }
 
-<h2>Room Id: @ViewBag.RoomId</h2>
+<h2>Meeting Room</h2>
+<p>Room Id: <b>@roomId</b></p>
+
+<input type="text" id="userName" placeholder="User name" />
+<button onclick="joinRoom()">Join</button>
+
+<hr />
+
+<video id="localVideo" autoplay playsinline muted width="300"></video>
+<video id="remoteVideo" autoplay playsinline width="300"></video>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+
+<script>
+    const roomId = "@roomId";
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/meetingHub")
+        .build();
+
+    let peerConnection;
+    let localStream;
+
+    const servers = {
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    };
+
+    connection.start();
+
+    async function joinRoom() {
+        const user = document.getElementById("userName").value;
+
+        await startMedia();
+        createPeerConnection();
+
+        connection.invoke("JoinRoom", roomId);
+    }
+
+    async function startMedia() {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        });
+
+        document.getElementById("localVideo").srcObject = localStream;
+    }
+
+    function createPeerConnection() {
+        peerConnection = new RTCPeerConnection(servers);
+
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+
+        peerConnection.ontrack = event => {
+            document.getElementById("remoteVideo").srcObject = event.streams[0];
+        };
+
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                connection.invoke("SendIceCandidate", roomId, JSON.stringify(event.candidate));
+            }
+        };
+    }
+</script>
