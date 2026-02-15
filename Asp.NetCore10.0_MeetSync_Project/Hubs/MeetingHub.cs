@@ -1,36 +1,35 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 
-namespace MeetSync.Web.Hubs
+namespace Asp.NetCore10._0_MeetSync_Project.Hubs
 {
     public class MeetingHub : Hub
     {
-        public async Task JoinRoom(Guid roomId, string userName)
+        public async Task JoinRoom(string roomName, string userName)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
+            await Groups.AddToGroupAsync(Context.ConnectionId, roomName);
 
-            await Clients.OthersInGroup(roomId.ToString())
-                .SendAsync("NewUserJoined");
-
-            await Clients.Group(roomId.ToString())
+            await Clients.Group(roomName)
                 .SendAsync("UserJoined", userName);
         }
 
-        public async Task SendOffer(Guid roomId, string offer)
+        public async Task SendMessage(string roomName, string userName, string message)
         {
-            await Clients.OthersInGroup(roomId.ToString())
-                .SendAsync("ReceiveOffer", offer);
+            await Clients.Group(roomName)
+                .SendAsync("ReceiveMessage", userName, message);
         }
 
-        public async Task SendAnswer(Guid roomId, string answer)
+        public async Task LeaveRoom(string roomName, string userName)
         {
-            await Clients.OthersInGroup(roomId.ToString())
-                .SendAsync("ReceiveAnswer", answer);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
+
+            await Clients.Group(roomName)
+                .SendAsync("UserLeft", userName);
         }
 
-        public async Task SendIceCandidate(Guid roomId, string candidate)
+        public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            await Clients.OthersInGroup(roomId.ToString())
-                .SendAsync("ReceiveIceCandidate", candidate);
+            // later participant tracking eklenecek
+            await base.OnDisconnectedAsync(exception);
         }
     }
 }

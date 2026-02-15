@@ -66,3 +66,37 @@
     </div>
 
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+
+<script>
+    const roomName = "@roomName";
+    const userName = "User_" + Math.floor(Math.random() * 1000);
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/meetingHub")
+        .build();
+
+    connection.start().then(() => {
+        connection.invoke("JoinRoom", roomName, userName);
+    });
+
+    connection.on("UserJoined", user => {
+        const el = document.createElement("div");
+        el.textContent = user + " katıldı";
+        document.getElementById("chatMessages").appendChild(el);
+    });
+
+    connection.on("ReceiveMessage", (user, message) => {
+        const el = document.createElement("div");
+        el.textContent = user + ": " + message;
+        document.getElementById("chatMessages").appendChild(el);
+    });
+
+    document.getElementById("chatInput")
+        .addEventListener("keypress", function(e) {
+            if (e.key === "Enter") {
+                connection.invoke("SendMessage", roomName, userName, this.value);
+                this.value = "";
+            }
+        });
+</script>
