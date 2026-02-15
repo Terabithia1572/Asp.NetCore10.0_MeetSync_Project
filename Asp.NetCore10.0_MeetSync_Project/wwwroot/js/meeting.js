@@ -11,9 +11,7 @@ const servers = {
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 };
 
-connection.start()
-    .then(() => console.log("SignalR connected"))
-    .catch(err => console.error(err));
+connection.start();
 
 async function joinRoom() {
     roomName = document.getElementById("roomName").value;
@@ -92,3 +90,17 @@ connection.on("ReceiveAnswer", async answer => {
 connection.on("ReceiveIceCandidate", async candidate => {
     await peerConnection.addIceCandidate(new RTCIceCandidate(JSON.parse(candidate)));
 });
+
+/* 🎛 TOGGLE CAMERA */
+
+function toggleCamera() {
+    const videoTrack = localStream.getVideoTracks()[0];
+    videoTrack.enabled = !videoTrack.enabled;
+}
+
+/* 🎛 TOGGLE MIC */
+
+function toggleMic() {
+    const audioTrack = localStream.getAudioTracks()[0];
+    audioTrack.enabled = !audioTrack.enabled;
+}
