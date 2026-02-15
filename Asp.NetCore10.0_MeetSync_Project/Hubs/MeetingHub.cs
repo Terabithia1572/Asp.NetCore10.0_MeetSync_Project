@@ -42,5 +42,10 @@ public class MeetingHub : Hub
         await Clients.OthersInGroup(roomName)
             .SendAsync("ReceiveIceCandidate", candidate);
     }
+    public async Task JoinRoom(Guid roomId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
+    }
+
 
 }
