@@ -8,14 +8,11 @@ namespace MeetSync.Web.Hubs
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
 
+            await Clients.OthersInGroup(roomId.ToString())
+                .SendAsync("NewUserJoined");
+
             await Clients.Group(roomId.ToString())
                 .SendAsync("UserJoined", userName);
-        }
-
-        public async Task SendMessage(Guid roomId, string userName, string message)
-        {
-            await Clients.Group(roomId.ToString())
-                .SendAsync("ReceiveMessage", userName, message);
         }
 
         public async Task SendOffer(Guid roomId, string offer)
