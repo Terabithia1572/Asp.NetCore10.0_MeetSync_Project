@@ -29,6 +29,11 @@
 <button onclick="toggleCamera()">Toggle Camera</button>
 <button onclick="toggleMic()">Toggle Mic</button>
 <button onclick="startConnection()">Start Connection</button>
+<form method="post" action="/Room/Create">
+    <input name="name" placeholder="Room Name" />
+    <button type="submit">Create Room</button>
+</form>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
 <script src="~/js/meeting.js"></script>

@@ -14,6 +14,12 @@
 <video id="localVideo" autoplay playsinline muted width="300"></video>
 <video id="remoteVideo" autoplay playsinline width="300"></video>
 
+<form method="post" action="/Room/Create">
+    <input name="name" placeholder="Room Name" />
+    <button type="submit">Create Room</button>
+</form>
+
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
 
 <script>
