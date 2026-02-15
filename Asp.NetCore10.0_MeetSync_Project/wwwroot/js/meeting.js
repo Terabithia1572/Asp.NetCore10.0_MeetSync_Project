@@ -2,23 +2,32 @@
     .withUrl("/meetingHub")
     .build();
 
+let peerConnection;
+let localStream;
+let roomName;
+let userName;
+
+const servers = {
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+};
+
 connection.start()
     .then(() => console.log("SignalR connected"))
     .catch(err => console.error(err));
 
-function joinRoom() {
-    const room = document.getElementById("roomName").value;
-    const user = document.getElementById("userName").value;
+async function joinRoom() {
+    roomName = document.getElementById("roomName").value;
+    userName = document.getElementById("userName").value;
 
-    connection.invoke("JoinRoom", room, user);
+    await startMedia();
+    createPeerConnection();
+
+    connection.invoke("JoinRoom", roomName, userName);
 }
 
 function sendMessage() {
-    const room = document.getElementById("roomName").value;
-    const user = document.getElementById("userName").value;
     const message = document.getElementById("messageInput").value;
-
-    connection.invoke("SendMessage", room, user, message);
+    connection.invoke("SendMessage", roomName, userName, message);
 }
 
 connection.on("UserJoined", user => {
@@ -31,4 +40,55 @@ connection.on("ReceiveMessage", (user, message) => {
     const li = document.createElement("li");
     li.textContent = user + ": " + message;
     document.getElementById("messages").appendChild(li);
+});
+
+async function startMedia() {
+    localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+    });
+
+    document.getElementById("localVideo").srcObject = localStream;
+}
+
+function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(servers);
+
+    localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.ontrack = event => {
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+    };
+
+    peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+            connection.invoke("SendIceCandidate", roomName, JSON.stringify(event.candidate));
+        }
+    };
+}
+
+async function startConnection() {
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    connection.invoke("SendOffer", roomName, JSON.stringify(offer));
+}
+
+connection.on("ReceiveOffer", async offer => {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer)));
+
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+
+    connection.invoke("SendAnswer", roomName, JSON.stringify(answer));
+});
+
+connection.on("ReceiveAnswer", async answer => {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answer)));
+});
+
+connection.on("ReceiveIceCandidate", async candidate => {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(JSON.parse(candidate)));
 });

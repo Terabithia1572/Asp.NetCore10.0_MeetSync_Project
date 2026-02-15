@@ -1,8 +1,8 @@
 ﻿@{
-    ViewData["Title"] = "SignalR Test";
+    ViewData["Title"] = "Meeting Test";
 }
 
-<h2>SignalR Test</h2>
+<h2>Meeting Test</h2>
 
 <input type="text" id="roomName" placeholder="Room name" />
 <input type="text" id="userName" placeholder="User name" />
@@ -23,6 +23,8 @@
 <h3>Remote Video</h3>
 <video id="remoteVideo" autoplay playsinline width="300"></video>
 
+<br />
+<button onclick="startConnection()">Start Connection</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
 <script src="~/js/meeting.js"></script>
