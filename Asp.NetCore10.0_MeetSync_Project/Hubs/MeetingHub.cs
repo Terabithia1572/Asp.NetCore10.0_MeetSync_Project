@@ -25,4 +25,22 @@ public class MeetingHub : Hub
         await Clients.Group(roomName)
             .SendAsync("ReceiveMessage", userName, message);
     }
+    public async Task SendOffer(string roomName, string offer)
+    {
+        await Clients.OthersInGroup(roomName)
+            .SendAsync("ReceiveOffer", offer);
+    }
+
+    public async Task SendAnswer(string roomName, string answer)
+    {
+        await Clients.OthersInGroup(roomName)
+            .SendAsync("ReceiveAnswer", answer);
+    }
+
+    public async Task SendIceCandidate(string roomName, string candidate)
+    {
+        await Clients.OthersInGroup(roomName)
+            .SendAsync("ReceiveIceCandidate", candidate);
+    }
+
 }
