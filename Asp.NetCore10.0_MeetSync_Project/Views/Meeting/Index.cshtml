@@ -1,0 +1,68 @@
+﻿@{
+    var roomName = ViewBag.RoomName as string;
+}
+
+<div class="h-screen bg-slate-950 text-white flex flex-col">
+
+    <!-- Top Bar -->
+    <div class="flex items-center justify-between px-6 py-3 bg-slate-900 border-b border-slate-800">
+        <h2 class="font-semibold">Oda: @roomName</h2>
+        <span class="text-sm text-slate-400">Bağlı</span>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+
+        <!-- Video Grid -->
+        <div class="flex-1 p-4 grid grid-cols-2 gap-4">
+
+            <div class="bg-black rounded-xl flex items-center justify-center">
+                <span class="text-slate-400">Video 1</span>
+            </div>
+
+            <div class="bg-black rounded-xl flex items-center justify-center">
+                <span class="text-slate-400">Video 2</span>
+            </div>
+
+        </div>
+
+        <!-- Side Panel -->
+        <div class="w-80 bg-slate-900 border-l border-slate-800 flex flex-col">
+
+            <!-- Participants -->
+            <div class="p-4 border-b border-slate-800">
+                <h3 class="font-semibold mb-2">Katılımcılar</h3>
+                <ul class="space-y-1 text-sm text-slate-300">
+                    <li>Sen</li>
+                </ul>
+            </div>
+
+            <!-- Chat -->
+            <div class="flex-1 p-4 overflow-y-auto">
+                <h3 class="font-semibold mb-2">Chat</h3>
+                <div id="chatMessages" class="space-y-2 text-sm text-slate-300"></div>
+            </div>
+
+            <div class="p-3 border-t border-slate-800">
+                <input id="chatInput"
+                       class="w-full p-2 rounded bg-slate-800 border border-slate-700"
+                       placeholder="Mesaj yaz..." />
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="bg-slate-900 border-t border-slate-800 py-3 flex justify-center gap-4">
+
+        <button class="px-4 py-2 bg-slate-700 rounded-lg">🎤</button>
+        <button class="px-4 py-2 bg-slate-700 rounded-lg">📷</button>
+        <button class="px-4 py-2 bg-red-600 rounded-lg"
+                onclick="window.location='/Dashboard'">
+            Çık
+        </button>
+
+    </div>
+
+</div>
