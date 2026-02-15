@@ -1,0 +1,28 @@
+﻿@{
+    ViewData["Title"] = "SignalR Test";
+}
+
+<h2>SignalR Test</h2>
+
+<input type="text" id="roomName" placeholder="Room name" />
+<input type="text" id="userName" placeholder="User name" />
+<button onclick="joinRoom()">Join Room</button>
+
+<hr />
+
+<input type="text" id="messageInput" placeholder="Message" />
+<button onclick="sendMessage()">Send</button>
+
+<ul id="messages"></ul>
+
+<hr />
+
+<h3>Local Video</h3>
+<video id="localVideo" autoplay playsinline muted width="300"></video>
+
+<h3>Remote Video</h3>
+<video id="remoteVideo" autoplay playsinline width="300"></video>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+<script src="~/js/meeting.js"></script>
