@@ -1,5 +1,5 @@
+using Asp.NetCore10._0_MeetSync_Project.Hubs;
 using MeetSync.Infrastructure.Persistence;
-using MeetSync.Web.Hubs;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
