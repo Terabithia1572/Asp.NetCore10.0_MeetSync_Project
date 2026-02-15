@@ -1,8 +1,39 @@
-﻿
-@{
-    ViewData["Title"] = "Index";
-    Layout = "~/Views/Shared/_MeetSyncLayout.cshtml";
+﻿@{
+    ViewData["Title"] = "Dashboard";
 }
 
-<h1>Index</h1>
+<div class="min-h-screen bg-slate-950 text-white flex items-center justify-center">
 
+    <div class="w-full max-w-xl space-y-6">
+
+        <h1 class="text-3xl font-bold text-center">MeetSync Dashboard</h1>
+
+        <!-- Oda Oluştur -->
+        <form asp-action="CreateRoom" method="post" class="bg-slate-900 p-6 rounded-xl space-y-4">
+            <h2 class="text-lg font-semibold">Yeni Oda Oluştur</h2>
+
+            <input name="roomName"
+                   class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700"
+                   placeholder="Oda adı gir..." />
+
+            <button class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-lg font-semibold">
+                Oda Oluştur
+            </button>
+        </form>
+
+        <!-- Odaya Katıl -->
+        <form asp-action="JoinRoom" method="post" class="bg-slate-900 p-6 rounded-xl space-y-4">
+            <h2 class="text-lg font-semibold">Odaya Katıl</h2>
+
+            <input name="roomName"
+                   class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700"
+                   placeholder="Oda adı gir..." />
+
+            <button class="w-full bg-green-600 hover:bg-green-700 p-3 rounded-lg font-semibold">
+                Odaya Katıl
+            </button>
+        </form>
+
+    </div>
+
+</div>

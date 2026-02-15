@@ -8,5 +8,17 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
         {
             return View();
         }
+
+        [HttpPost]
+        public IActionResult CreateRoom(string roomName)
+        {
+            return RedirectToAction("Index", "Meeting", new { roomName });
+        }
+
+        [HttpPost]
+        public IActionResult JoinRoom(string roomName)
+        {
+            return RedirectToAction("Index", "Meeting", new { roomName });
+        }
     }
 }
