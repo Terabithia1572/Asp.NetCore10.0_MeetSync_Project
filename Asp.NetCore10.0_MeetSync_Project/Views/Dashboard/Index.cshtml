@@ -2,38 +2,242 @@
     ViewData["Title"] = "Dashboard";
 }
 
-<div class="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+<!DOCTYPE html>
 
-    <div class="w-full max-w-xl space-y-6">
-
-        <h1 class="text-3xl font-bold text-center">MeetSync Dashboard</h1>
-
-        <!-- Oda Oluştur -->
-        <form asp-action="CreateRoom" method="post" class="bg-slate-900 p-6 rounded-xl space-y-4">
-            <h2 class="text-lg font-semibold">Yeni Oda Oluştur</h2>
-
-            <input name="roomName"
-                   class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700"
-                   placeholder="Oda adı gir..." />
-
-            <button class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-lg font-semibold">
-                Oda Oluştur
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Design Sync - Video Conference</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+        darkMode: "class",
+        theme: {
+        extend: {
+        colors: {
+        "primary": "#0d59f2",
+        "background-light": "#f5f6f8",
+        "background-dark": "#101622",
+        },
+        fontFamily: {
+        "display": ["Inter"]
+        },
+        borderRadius: { "DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px" },
+        },
+        },
+        }
+    </script>
+    <style>
+        .glass-morphism {
+        background: rgba(16, 22, 34, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .active-speaker-glow {
+        box-shadow: 0 0 0 3px #0d59f2, 0 0 20px rgba(13, 89, 242, 0.4);
+        }
+        .sidebar-transition {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-white overflow-hidden h-screen flex flex-col">
+    <!-- Top Utility Bar -->
+    <header class="flex items-center justify-between px-6 py-3 border-b border-white/5 bg-background-dark/50 backdrop-blur-sm z-20">
+        <div class="flex items-center gap-4">
+            <div class="size-8 bg-primary rounded-lg flex items-center justify-center">
+                <span class="material-symbols-outlined text-white text-xl">hub</span>
+            </div>
+            <div>
+                <h1 class="text-white text-sm font-bold leading-tight tracking-tight uppercase opacity-60">Design Sync</h1>
+                <h2 class="text-white text-base font-semibold leading-tight">Weekly Sync - Frontend Architecture</h2>
+            </div>
+            <div class="ml-4 px-2 py-1 rounded bg-white/5 border border-white/10 flex items-center gap-2">
+                <span class="size-2 rounded-full bg-red-500 animate-pulse"></span>
+                <span class="text-xs font-medium text-white/80">00:42:12</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="flex -space-x-2 mr-4">
+                <div class="size-8 rounded-full border-2 border-background-dark bg-cover" data-alt="User avatar thumbnail" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDz783p2jAs-b70EzqaKe2YWRSLB_N9U0tv5QVZCF8vPWtNuoA6JI6Z74-NuiSt4UuvZ5T-5u0cAOejRMJWqH4jjI7iiS3FSi_pJ0VQ8NvaG9pWlue9gq_48PGcxZXpZjqnMUkfh2hAIatNM770NF-CAFe8r2L_rIMQCFRYwnDSWlxizzBshwr672sKh-LtbQZnQp4ZLl8nMuXQqg-mXIaOEWCIQLF7gx9y3BJ4G28goG8piZ62DiLOn6JUNlrSdTNqwlHGZRqimqU')"></div>
+                <div class="size-8 rounded-full border-2 border-background-dark bg-cover" data-alt="User avatar thumbnail" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC_49MKFX5JoACSxQGCRHsLhQGdMoFY6paWj8312wWSCgBM0pSFXdmwf6CvHiok9MG6qkig_du278tB9Eu1jQLLjjuwFUVgS4KHUoLvTmbh02GvUEz38yfjWkYpKJFyd78ApGrB5x0VXFT3rl2h1HfH56Xugl-gGpxv5B4MI4FXI7WWDf7Eu065-vopekwTxQJ3D7R_b-5bx_vLQsChmjpUxtCQjBiwIX6X1L_n2fLMVk5RS8QOVPnge5cwMd7EqpgW1pH5NNjfwKM')"></div>
+                <div class="size-8 rounded-full border-2 border-background-dark bg-cover" data-alt="User avatar thumbnail" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCuKhM2lVTv3uM4sgfEUSFkWAjsQVjmXq5ltK_TqQ0p_EcbEz8n4Es-Y4bTivmYpKZsELhJ1VFKsm_wR-7dhz9bTx5GkBrPY3V1UXiUA-fzzXBPwz-zR-s5MEG3Rx4Tcl-v3OqXgR_d71fYEZNjY4IWcwTczbmU58j1_I4gOaQn_fUnMuFy_LXmFbCCVs6lImR2U8UFlXDV0GiG0IggUSL-1r8zKhLzreuntGqzLP2eRJw-KB01i2_Io-DolYcKafHpYcK2q-VgVzE')"></div>
+                <div class="size-8 rounded-full border-2 border-background-dark flex items-center justify-center bg-zinc-800 text-[10px] font-bold">+12</div>
+            </div>
+            <button class="flex items-center justify-center size-10 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-colors">
+                <span class="material-symbols-outlined">settings</span>
             </button>
-        </form>
-
-        <!-- Odaya Katıl -->
-        <form asp-action="JoinRoom" method="post" class="bg-slate-900 p-6 rounded-xl space-y-4">
-            <h2 class="text-lg font-semibold">Odaya Katıl</h2>
-
-            <input name="roomName"
-                   class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700"
-                   placeholder="Oda adı gir..." />
-
-            <button class="w-full bg-green-600 hover:bg-green-700 p-3 rounded-lg font-semibold">
-                Odaya Katıl
+            <button class="flex items-center justify-center size-10 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-colors">
+                <span class="material-symbols-outlined">info</span>
             </button>
-        </form>
-
-    </div>
-
-</div>
+        </div>
+    </header>
+    <!-- Main Workspace -->
+    <main class="flex flex-1 overflow-hidden relative">
+        <!-- Video Grid Container -->
+        <div class="flex-1 p-6 relative flex flex-col items-center justify-center bg-zinc-950/20">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full h-full max-w-[1400px]">
+                <!-- Participant 1 (Active Speaker) -->
+                <div class="relative group rounded-xl overflow-hidden active-speaker-glow bg-zinc-900 aspect-video flex items-center justify-center">
+                    <div class="absolute inset-0 bg-cover bg-center" data-alt="Person talking in a home office" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCsWCopDxEUDXd7NGTelH80EDP9WOviCSPOyqMI6i60Hfnhu0LkNZrERhx9LH8AMALv-497Bp6JFBokpHZRZmZfmSKKdtQqi3dYDY3AIOGqiITxd2Otec7Y4jdYqFOEs-L_PHNOngNZTJv-B8LZeKPcUZr0CrzK5TWVSoHxf7sS_Oj6hoTIl4-72O1GpWXUrtKnd7GLv4Pg6e0oiALb7LV0JpGWPvmLMGtzdhBb8zGYKxwxPx3ZtNgSxrWGcwa8gj5pvUPQb4DKO80')"></div>
+                    <div class="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10">
+                        <span class="material-symbols-outlined text-sm text-primary">equalizer</span>
+                        <span class="text-xs font-semibold">Alex Rivera (Host)</span>
+                    </div>
+                </div>
+                <!-- Participant 2 -->
+                <div class="relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video flex items-center justify-center">
+                    <div class="absolute inset-0 bg-cover bg-center" data-alt="Professional woman in bright office" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDhTVg460D8qP-06OExdXNHPIQf0Ssl4M6cgC0lt7mvWpjyTa1vDFON6vjsrfoX5yfCKknTiyK1gZQc6l80GFvjYKwszPJsbuXXfSGsZ1nUU2uaUsLWPTJSnQ1C-zvBBqImYbXTTVz8ccnI7_w69s2a-k7EoDvQFAIPf-_FRpZUe_hTefxikV2CPqjs2UIshlc78w3NWy5neDRA9K1F32fcVQAHPJnQ3o6hYlpp3qZgy0i0sxB80o1yLBEu7vgNQ0S2MNjs86rJ8fM')"></div>
+                    <div class="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10">
+                        <span class="material-symbols-outlined text-sm text-white/60">mic</span>
+                        <span class="text-xs font-semibold">Jordan Chen</span>
+                    </div>
+                </div>
+                <!-- Participant 3 (Muted) -->
+                <div class="relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video flex items-center justify-center">
+                    <div class="absolute inset-0 bg-cover bg-center" data-alt="Male engineer with headphones" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAe5c1eMzxzcbqUU3Xhce8veGrhjjMC9H6EnPOHUr_VT0fklwrKaRYUMHjQP743PjO5-_THjP_hTXvoeFOOt6QhUfWwWYF0Saz27Iqw7BdM6cwLodQho1TfnCjrht78Xx-W5wbfSWBHuZf-_o-SNmoI7W6qbAqDc_DeMPlwR09Zm-Rk3t16uDbqbE8ZW5J8nEAkXYxxXm8ShKyOGUO99CwgSiVxP5RtDPk6n5hW9EyvE3FoiNUL-IvXSLSNEO8WAO1wPAJ53_UVtKQ')"></div>
+                    <div class="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10">
+                        <span class="material-symbols-outlined text-sm text-red-500">mic_off</span>
+                        <span class="text-xs font-semibold">Taylor Smith</span>
+                    </div>
+                </div>
+                <!-- Participant 4 -->
+                <div class="relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video flex items-center justify-center">
+                    <div class="absolute inset-0 bg-cover bg-center opacity-60 grayscale" data-alt="Webcam view of creative professional" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCyxezST9hglJ_kGBF1x3mHBTm-mp2OoFXkYKQhwBLa8OncX21Yhd5Hi_jYUJrHHfg-fWI_nfRhF8pty5xrMCCerWOVjN61xIZh9IroWGPmkzk9gEJA4ba6itcz4XGtERl2LrfrTFUX5qs8IhwjRHWqUKZhViJRhqxGidqRo5EkhpgTIlrytbZd8DxDnhmWazFnFwIw5lg2ifCxrzcmv0W3c7YjouS0VnpUuqDLjhL5KUDCQ8iXe7pGamNocwchyvhOSHy4Nyrk0PU')"></div>
+                    <div class="flex flex-col items-center gap-4 z-10">
+                        <div class="size-20 rounded-full bg-zinc-800 flex items-center justify-center text-2xl font-bold border-4 border-zinc-700">M</div>
+                    </div>
+                    <div class="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10">
+                        <span class="material-symbols-outlined text-sm text-red-500">videocam_off</span>
+                        <span class="text-xs font-semibold">Morgan Freeman</span>
+                    </div>
+                </div>
+                <!-- Participant 5 -->
+                <div class="relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video flex items-center justify-center">
+                    <div class="absolute inset-0 bg-cover bg-center" data-alt="Developer at a desk with multi-monitors" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCcVrq2qDT0B_BpUlwsdWfBH70r_IvRub0kBUrnxsVn-toRwQBncbvTNI-QmUOD-nWqKHD5CMeKB39Y4ZU6D8QoUSNT1PRCwUyRTiHKJJMA8EvIOQuSNENjWUL4K-DrZtWYgbfq8WZZ4J9Hf22RL7gXYL-Z8D-JttDDsIQFtpc76duOFLg3v3KVaiAC4549jpCQDuO3rU4wVz9G2sgOKpH4JIKu3oNgM1iqtBYtqy1aKuohgQT4Bl0JmxO9OfqW_6uvwW5xP7tFYcI')"></div>
+                    <div class="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10">
+                        <span class="material-symbols-outlined text-sm text-white/60">mic</span>
+                        <span class="text-xs font-semibold">Casey Wright</span>
+                    </div>
+                </div>
+                <!-- Participant 6 -->
+                <div class="relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video flex items-center justify-center">
+                    <div class="absolute inset-0 bg-cover bg-center" data-alt="Creative designer in a studio" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB1LQgjZ1kZrnxClvMdZut6Bmnju0gbknRlrt1iZaODTuef-CzTQ4mMsAHGMqbQDvPI0nvbJVngETB4XxkhyWa_xKOeIaTAEtwB9X1lPmqST2CjjV8EtW5U77acbXv8i84JQmvM9rYx6mA67O0aoua0iegg5V9VD0FDTIgr--tYatoHX9MMXZpSsoaTxQXxLpI3Z0QtL1XKUcXH4-ewhJOZmmg_sq1eeR4eQwF6WUQeIqf9vAHJ44_xYwqDZhoa3nH2NXFBRcetjzw')"></div>
+                    <div class="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10">
+                        <span class="material-symbols-outlined text-sm text-white/60">mic</span>
+                        <span class="text-xs font-semibold">Jamie Doe</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Floating Control Bar -->
+            <div class="absolute bottom-8 left-1/2 -translate-x-1/2 glass-morphism rounded-2xl px-6 py-4 flex items-center gap-4 z-30 shadow-2xl">
+                <div class="flex items-center gap-2 px-2 border-r border-white/10 pr-4">
+                    <button class="size-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-all active:scale-95 group relative">
+                        <span class="material-symbols-outlined">mic</span>
+                        <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-zinc-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Mute (Cmd+D)</div>
+                    </button>
+                    <button class="size-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-all active:scale-95 group relative">
+                        <span class="material-symbols-outlined">videocam</span>
+                        <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-zinc-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Camera (Cmd+E)</div>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="size-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-all">
+                        <span class="material-symbols-outlined">present_to_all</span>
+                    </button>
+                    <button class="size-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-all">
+                        <span class="material-symbols-outlined">mood</span>
+                    </button>
+                    <button class="size-11 rounded-xl bg-primary/20 text-primary border border-primary/30 flex items-center justify-center transition-all">
+                        <span class="material-symbols-outlined">chat</span>
+                    </button>
+                    <button class="size-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-all">
+                        <span class="material-symbols-outlined">more_horiz</span>
+                    </button>
+                </div>
+                <div class="pl-4 border-l border-white/10">
+                    <button class="h-11 px-6 rounded-xl bg-red-600 hover:bg-red-700 flex items-center gap-2 text-white font-bold transition-all active:scale-95">
+                        <span class="material-symbols-outlined">call_end</span>
+                        <span class="hidden sm:inline">Leave</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Right Chat Sidebar -->
+        <aside class="sidebar-transition w-80 bg-zinc-900 border-l border-white/5 flex flex-col shrink-0">
+            <div class="p-4 border-b border-white/5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">chat_bubble</span>
+                    <h3 class="font-bold">In-call Chat</h3>
+                </div>
+                <button class="size-8 rounded-lg hover:bg-white/5 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                <!-- Message -->
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-primary">Jordan Chen</span>
+                        <span class="text-[10px] text-white/40">10:45 AM</span>
+                    </div>
+                    <div class="bg-zinc-800 rounded-lg p-3 text-sm leading-relaxed">
+                        Hey everyone! Just uploaded the new design tokens to the repo. Can you take a look when we finish the walkthrough?
+                    </div>
+                </div>
+                <!-- Message (Self) -->
+                <div class="flex flex-col gap-1.5 items-end">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="text-[10px] text-white/40">10:46 AM</span>
+                        <span class="text-xs font-bold opacity-60">You</span>
+                    </div>
+                    <div class="bg-primary rounded-lg p-3 text-sm leading-relaxed text-white">
+                        On it! I'll check the main branch right after this.
+                    </div>
+                </div>
+                <!-- Message -->
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-primary">Alex Rivera</span>
+                        <span class="text-[10px] text-white/40">10:47 AM</span>
+                    </div>
+                    <div class="bg-zinc-800 rounded-lg p-3 text-sm leading-relaxed">
+                        Great, let's look at the responsive grid section first.
+                    </div>
+                </div>
+                <!-- Message -->
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-primary">Taylor Smith</span>
+                        <span class="text-[10px] text-white/40">10:48 AM</span>
+                    </div>
+                    <div class="bg-zinc-800 rounded-lg p-3 text-sm leading-relaxed">
+                        <span class="text-white/60">Has joined the chat</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Chat Input -->
+            <div class="p-4 border-t border-white/5">
+                <div class="relative">
+                    <textarea class="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all pr-12 resize-none" placeholder="Message to everyone..." rows="1"></textarea>
+                    <button class="absolute right-2 top-1.5 size-8 rounded-lg bg-primary hover:bg-primary/90 flex items-center justify-center transition-colors">
+                        <span class="material-symbols-outlined text-lg">send</span>
+                    </button>
+                </div>
+                <div class="flex items-center gap-4 mt-3">
+                    <button class="text-white/40 hover:text-white flex items-center gap-1 transition-colors">
+                        <span class="material-symbols-outlined text-lg">attach_file</span>
+                    </button>
+                    <button class="text-white/40 hover:text-white flex items-center gap-1 transition-colors">
+                        <span class="material-symbols-outlined text-lg">sentiment_satisfied</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </main>
+</body></html>
