@@ -8,43 +8,32 @@
         <div class="text-center space-y-2">
             <h2 class="text-slate-500 dark:text-slate-400 font-medium text-lg">Welcome back, @ViewBag.UserName</h2>
             <h3 class="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white">Ready to connect?</h3>
-            <p class="text-slate-500 dark:text-slate-400 max-w-md mx-auto">Start a new meeting or join an ongoing conversation with your team.</p>
         </div>
 
         <div class="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-2xl shadow-primary/5">
             <div class="space-y-6">
-                <form asp-action="JoinRoom" method="post" class="space-y-4">
-                    <label class="block">
-                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Join an existing room</span>
-                        <div class="mt-2 relative">
-                            <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">link</span>
-                            <input name="roomName" required class="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white placeholder:text-slate-400" placeholder="Enter Room Name or Meeting ID" type="text" />
-                        </div>
-                    </label>
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <button type="submit" class="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 group">
-                            <span class="material-symbols-outlined text-[20px] transition-transform group-hover:scale-110">login</span>
-                            Join Meeting
-                        </button>
-                    </div>
-                </form>
-
-                <div class="relative py-4">
-                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-800"></div></div>
-                    <div class="relative flex justify-center">
-                        <span class="bg-white dark:bg-slate-900 px-4 text-xs font-bold uppercase tracking-widest text-slate-400">Status</span>
-                    </div>
+                <div class="flex justify-center gap-4 mb-6">
+                    <button id="lobby-mic" onclick="togglePref('mic')" class="size-14 rounded-full bg-primary flex items-center justify-center shadow-lg transition-all active:scale-90">
+                        <span class="material-symbols-outlined text-white">mic</span>
+                    </button>
+                    <button id="lobby-cam" onclick="togglePref('cam')" class="size-14 rounded-full bg-primary flex items-center justify-center shadow-lg transition-all active:scale-90">
+                        <span class="material-symbols-outlined text-white">videocam</span>
+                    </button>
                 </div>
 
-                <div class="flex flex-wrap items-center justify-center gap-6">
-                    <div id="cam-status" class="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                        <span class="material-symbols-outlined text-[18px]">videocam_off</span>
-                        Checking Camera...
+                <form asp-action="JoinRoom" method="post" class="space-y-4">
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">link</span>
+                        <input name="roomName" required class="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all text-white" placeholder="Enter Room Name" type="text" />
                     </div>
-                    <div id="mic-status" class="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                        <span class="material-symbols-outlined text-[18px]">mic_off</span>
-                        Checking Mic...
-                    </div>
+                    <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined">login</span> Join Meeting
+                    </button>
+                </form>
+
+                <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-green-500 font-medium">
+                    <div id="cam-status" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">videocam</span> Camera ready</div>
+                    <div id="mic-status" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">mic</span> Mic connected</div>
                 </div>
             </div>
         </div>
@@ -53,28 +42,16 @@
 
 @section Scripts {
     <script>
-        // Sayfa açıldığında kamera ve mikrofon kontrolü yapalım kral
-        async function checkMedia() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                
-                // Başarılıysa ikonları yeşil yapalım
-                const camStatus = document.getElementById('cam-status');
-                camStatus.innerHTML = '<span class="material-symbols-outlined text-[18px]">videocam</span> Camera ready';
-                camStatus.classList.remove('text-slate-500');
-                camStatus.classList.add('text-green-500');
+        localStorage.setItem("pref_mic", "true");
+        localStorage.setItem("pref_cam", "true");
 
-                const micStatus = document.getElementById('mic-status');
-                micStatus.innerHTML = '<span class="material-symbols-outlined text-[18px]">mic</span> Mic connected';
-                micStatus.classList.remove('text-slate-500');
-                micStatus.classList.add('text-green-500');
-
-                // Stream'i hemen kapatalım (sadece test ettik, meeting sayfasında tekrar açacağız)
-                stream.getTracks().forEach(track => track.stop());
-            } catch (err) {
-                console.error("Cihazlara erişilemedi:", err);
-            }
+        function togglePref(type) {
+            let current = localStorage.getItem("pref_" + type) === "true";
+            localStorage.setItem("pref_" + type, !current);
+            const btn = document.getElementById("lobby-" + type);
+            btn.classList.toggle("bg-red-600", current);
+            btn.classList.toggle("bg-primary", !current);
+            btn.querySelector('span').textContent = type === "mic" ? (current ? "mic_off" : "mic") : (current ? "videocam_off" : "videocam");
         }
-        checkMedia();
     </script>
 }

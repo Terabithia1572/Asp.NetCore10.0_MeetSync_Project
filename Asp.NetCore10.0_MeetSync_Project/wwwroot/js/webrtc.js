@@ -7,129 +7,167 @@ const connection = new signalR.HubConnectionBuilder()
 
 let localStream;
 let peerConnections = {};
+let isModerator = false;
 const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-// 1. Başlatma
 async function init() {
     try {
-        // Kamerayı ve Mikrofonu al
+        const prefMic = localStorage.getItem("pref_mic") === "true";
+        const prefCam = localStorage.getItem("pref_cam") === "true";
+
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localStream.getAudioTracks()[0].enabled = prefMic;
+        localStream.getVideoTracks()[0].enabled = prefCam;
+
+        updateBtnUI("btn-mic", prefMic, 'mic');
+        updateBtnUI("btn-cam", prefCam, 'videocam');
+
         document.getElementById("localVideo").srcObject = localStream;
-
-        // SignalR Bağlantısını Başlat
         await connection.start();
-        console.log("SignalR Connected.");
-
-        // Odaya Katıl
         await connection.invoke("JoinRoom", roomName, userName);
-    } catch (err) {
-        console.error("Başlatma hatası:", err);
-        alert("Kamera/Mikrofon erişimi engellendi!");
+    } catch (err) { console.error(err); }
+}
+
+function updateBtnUI(id, state, icon) {
+    const btn = document.getElementById(id);
+    if (btn) {
+        btn.classList.toggle("bg-red-500/20", !state);
+        btn.querySelector('span').textContent = state ? icon : icon + '_off';
     }
 }
 
-// 2. PeerConnection Fabrikası
 function createPeerConnection(remoteId, remoteName) {
     const pc = new RTCPeerConnection(servers);
     peerConnections[remoteId] = pc;
-
-    // Kendi stream'imizi ekle
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    // ICE Candidate gönderimi
-    pc.onicecandidate = event => {
-        if (event.candidate) {
-            connection.invoke("SendIceCandidate", JSON.stringify(event.candidate), remoteId);
-        }
-    };
-
-    // Karşı tarafın görüntüsü geldiğinde
-    pc.ontrack = event => {
-        console.log("Remote track received from:", remoteId);
-        addRemoteVideoUI(remoteId, remoteName, event.streams[0]);
-    };
+    pc.onicecandidate = e => { if (e.candidate) connection.invoke("SendIceCandidate", JSON.stringify(e.candidate), remoteId); };
+    pc.ontrack = e => addRemoteVideoUI(remoteId, remoteName, e.streams[0]);
 
     return pc;
 }
 
-// 3. UI'a Video Kutusu Ekleme (Senin Tasarımınla Birebir)
 function addRemoteVideoUI(remoteId, remoteName, stream) {
-    if (document.getElementById(`container-${remoteId}`)) {
-        document.getElementById(`video-${remoteId}`).srcObject = stream;
-        return;
-    }
+    if (document.getElementById(`container-${remoteId}`)) return;
 
     const grid = document.getElementById("video-grid");
-
     const container = document.createElement("div");
     container.id = `container-${remoteId}`;
-    container.className = "relative rounded-xl overflow-hidden bg-zinc-900 aspect-video shadow-2xl border border-white/5";
+    container.className = "relative rounded-xl overflow-hidden bg-zinc-900 aspect-video shadow-2xl border border-white/5 cursor-pointer group";
+    container.onclick = () => container.requestFullscreen ? container.requestFullscreen() : null;
 
     const video = document.createElement("video");
     video.id = `video-${remoteId}`;
     video.autoplay = true;
     video.playsinline = true;
     video.srcObject = stream;
-    video.className = "w-full h-full object-cover bg-black";
+    video.className = "w-full h-full object-cover";
 
     const label = document.createElement("div");
-    label.className = "absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md border border-white/10";
-    label.innerHTML = `<span class="text-xs font-semibold text-white">${remoteName}</span>`;
+    label.className = "absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md";
+    label.innerHTML = `<span class="text-xs font-semibold text-white r-name-${remoteId}">${remoteName}</span>`;
 
     container.appendChild(video);
     container.appendChild(label);
     grid.appendChild(container);
+    updateParticipantList(remoteId, remoteName, true);
 }
 
-// 4. SignalR Eventleri (El Sıkışma)
-connection.on("UserJoined", async (joinedUser, remoteId) => {
-    console.log("User joined:", joinedUser);
-    const pc = createPeerConnection(remoteId, joinedUser);
+function updateParticipantList(id, name, isJoining) {
+    const list = document.getElementById("participant-list");
+    if (isJoining) {
+        const li = document.createElement("li");
+        li.id = `list-item-${id}`;
+        li.className = "flex items-center justify-between bg-white/5 p-2 rounded-lg";
+        li.innerHTML = `<span class="text-sm r-name-${id}">${name}</span>`;
+        list.appendChild(li);
+    } else {
+        const el = document.getElementById(`list-item-${id}`);
+        if (el) el.remove();
+    }
+    document.getElementById("participant-count").textContent = (Object.keys(peerConnections).length + 1) + " Participants";
+}
+
+// SignalR Events
+connection.on("ModeratorStatus", status => isModerator = status);
+connection.on("UserJoined", async (name, id) => {
+    const pc = createPeerConnection(id, name);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    connection.invoke("SendOffer", JSON.stringify(offer), remoteId);
+    connection.invoke("SendOffer", JSON.stringify(offer), id);
 });
-
-connection.on("ReceiveOffer", async (offer, remoteId) => {
-    const pc = createPeerConnection(remoteId, "Remote User");
+connection.on("ReceiveOffer", async (offer, id) => {
+    const pc = createPeerConnection(id, "User");
     await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer)));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    connection.invoke("SendAnswer", JSON.stringify(answer), remoteId);
+    connection.invoke("SendAnswer", JSON.stringify(answer), id);
+});
+connection.on("ReceiveAnswer", async (ans, id) => await peerConnections[id].setRemoteDescription(new RTCSessionDescription(JSON.parse(ans))));
+connection.on("ReceiveIceCandidate", async (can, id) => await peerConnections[id].addIceCandidate(new RTCIceCandidate(JSON.parse(can))));
+connection.on("UserDisconnected", id => {
+    document.getElementById(`container-${id}`)?.remove();
+    updateParticipantList(id, "", false);
+    delete peerConnections[id];
+});
+connection.on("RoomClosedByModerator", () => { alert("Moderator ended the meeting."); window.location.href = "/Dashboard"; });
+connection.on("UserNameUpdated", (id, name) => {
+    document.querySelectorAll(`.r-name-${id}`).forEach(el => el.textContent = name);
 });
 
-connection.on("ReceiveAnswer", async (answer, remoteId) => {
-    await peerConnections[remoteId].setRemoteDescription(new RTCSessionDescription(JSON.parse(answer)));
-});
-
-connection.on("ReceiveIceCandidate", async (candidate, remoteId) => {
-    await peerConnections[remoteId].addIceCandidate(new RTCIceCandidate(JSON.parse(candidate)));
-});
-
-// 5. Chat Sistemi
-document.getElementById("btn-send-chat").onclick = () => {
-    const input = document.getElementById("chat-input");
-    if (input.value) {
-        connection.invoke("SendMessage", roomName, userName, input.value);
-        input.value = "";
+// Actions
+function changeMyName() {
+    const newName = prompt("Change your display name:", userName);
+    if (newName) {
+        document.getElementById("local-name-label").textContent = newName + " (You)";
+        connection.invoke("UpdateUserName", roomName, newName);
     }
+}
+
+document.getElementById("btn-send-chat").onclick = () => {
+    const inp = document.getElementById("chat-input");
+    if (inp.value) { connection.invoke("SendMessage", roomName, userName, inp.value); inp.value = ""; }
 };
 
-connection.on("ReceiveMessage", (user, message) => {
-    const msgDiv = document.getElementById("chat-messages");
+connection.on("ReceiveMessage", (user, msg) => {
+    const box = document.getElementById("chat-messages");
     const isMe = user === userName;
-
-    const html = `
-        <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} gap-1">
-            <span class="text-[10px] text-white/40">${user}</span>
-            <div class="${isMe ? 'bg-primary' : 'bg-zinc-800'} rounded-lg p-2 max-w-[80%]">
-                ${message}
-            </div>
-        </div>
-    `;
-    msgDiv.innerHTML += html;
-    msgDiv.scrollTop = msgDiv.scrollHeight;
+    box.innerHTML += `<div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} gap-1">
+        <span class="text-[10px] text-white/40">${user}</span>
+        <div class="${isMe ? 'bg-primary' : 'bg-zinc-800'} rounded-lg p-2 max-w-[80%]">${msg}</div>
+    </div>`;
+    box.scrollTop = box.scrollHeight;
 });
 
-// Çalıştır kral!
+// Mic/Cam Toggles
+document.getElementById("btn-mic").onclick = function () {
+    const state = !localStream.getAudioTracks()[0].enabled;
+    localStream.getAudioTracks()[0].enabled = state;
+    updateBtnUI("btn-mic", state, 'mic');
+};
+document.getElementById("btn-cam").onclick = function () {
+    const state = !localStream.getVideoTracks()[0].enabled;
+    localStream.getVideoTracks()[0].enabled = state;
+    updateBtnUI("btn-cam", state, 'videocam');
+};
+
+// Screen Share
+let isSharing = false;
+document.getElementById("btn-share").onclick = async function () {
+    if (!isSharing) {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const track = stream.getVideoTracks()[0];
+        for (let id in peerConnections) peerConnections[id].getSenders().find(s => s.track.kind === 'video').replaceTrack(track);
+        document.getElementById("localVideo").srcObject = stream;
+        track.onended = () => stopShare();
+        isSharing = true;
+    } else { stopShare(); }
+};
+function stopShare() {
+    const track = localStream.getVideoTracks()[0];
+    for (let id in peerConnections) peerConnections[id].getSenders().find(s => s.track.kind === 'video').replaceTrack(track);
+    document.getElementById("localVideo").srcObject = localStream;
+    isSharing = false;
+}
+
 init();
