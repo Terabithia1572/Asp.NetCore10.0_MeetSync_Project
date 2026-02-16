@@ -11,17 +11,19 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
         }
 
         [HttpPost]
-        public IActionResult Login(string username, string password)
+        public IActionResult Login(string email, string password)
         {
-            // 🔹 Şimdilik fake login (ileride Identity bağlayacağız)
-
-            if (!string.IsNullOrEmpty(username))
+            // Şimdilik basit kontrol, ileride Identity gelecek
+            if (!string.IsNullOrEmpty(email) && !string.IsNullOrEmpty(password))
             {
+                // WebRTC odasında görünecek kullanıcı adı olarak email'in ilk kısmını alalım
+                string username = email.Split('@')[0];
                 HttpContext.Session.SetString("username", username);
+
                 return RedirectToAction("Index", "Dashboard");
             }
 
-            ViewBag.Error = "Kullanıcı adı giriniz";
+            ViewBag.Error = "Lütfen e-posta ve şifrenizi kontrol ediniz.";
             return View();
         }
 
