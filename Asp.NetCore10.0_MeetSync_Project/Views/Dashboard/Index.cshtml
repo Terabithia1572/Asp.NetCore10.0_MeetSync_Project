@@ -3,37 +3,59 @@
     ViewData["Title"] = "Lobby";
 }
 
-<main class="flex-1 flex flex-col items-center justify-center p-6 lg:p-12">
-    <div class="w-full max-w-2xl space-y-8">
-        <div class="text-center space-y-2">
-            <h2 class="text-slate-500 dark:text-slate-400 font-medium text-lg">Welcome back, @ViewBag.UserName</h2>
-            <h3 class="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white">Ready to connect?</h3>
+@{
+    Layout = "_MeetSyncLayout";
+    ViewData["Title"] = "Ready to Connect?";
+}
+
+<main class="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 relative overflow-hidden bg-[#09090b]">
+    <div class="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px]"></div>
+    <div class="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px]"></div>
+
+    <div class="w-full max-w-4xl space-y-12 relative z-10">
+        <div class="text-center space-y-4">
+            <h2 class="text-primary font-bold text-lg tracking-[0.2em] uppercase">ConnectPro Platform</h2>
+            <h3 class="text-5xl md:text-7xl font-black tracking-tighter text-white">Ready to connect?</h3>
+            <p class="text-slate-400 text-lg max-w-md mx-auto">Elevate your remote collaboration with high-fidelity sync.</p>
         </div>
 
-        <div class="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-2xl shadow-primary/5">
-            <div class="space-y-6">
-                <div class="flex justify-center gap-4 mb-6">
-                    <button id="lobby-mic" onclick="togglePref('mic')" class="size-14 rounded-full bg-primary flex items-center justify-center shadow-lg transition-all active:scale-90">
-                        <span class="material-symbols-outlined text-white">mic</span>
-                    </button>
-                    <button id="lobby-cam" onclick="togglePref('cam')" class="size-14 rounded-full bg-primary flex items-center justify-center shadow-lg transition-all active:scale-90">
-                        <span class="material-symbols-outlined text-white">videocam</span>
-                    </button>
+        <div class="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-2 md:p-10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)]">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                
+                <div class="space-y-8 p-4">
+                    <form asp-action="JoinRoom" method="post" class="space-y-6">
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-slate-400 ml-1">MEETING IDENTIFIER</label>
+                            <div class="relative group">
+                                <span class="material-symbols-outlined absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-all">link</span>
+                                <input name="roomName" required class="w-full pl-14 pr-6 py-5 bg-zinc-950/50 border border-white/5 rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-white text-lg transition-all placeholder:text-zinc-700" placeholder="e.g. Design-Sync-2026" />
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-black py-5 rounded-2xl shadow-2xl shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg">
+                            <span class="material-symbols-outlined">bolt</span> JOIN SESSION
+                        </button>
+                    </form>
                 </div>
 
-                <form asp-action="JoinRoom" method="post" class="space-y-4">
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">link</span>
-                        <input name="roomName" required class="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all text-white" placeholder="Enter Room Name" type="text" />
+                <div class="flex flex-col items-center gap-8 border-l border-white/5 pl-4 md:pl-12 py-4">
+                    <div class="flex gap-6">
+                        <button id="lobby-mic" onclick="togglePref('mic')" class="size-20 rounded-3xl bg-primary flex items-center justify-center shadow-2xl transition-all hover:rotate-3">
+                            <span class="material-symbols-outlined text-white text-4xl">mic</span>
+                        </button>
+                        <button id="lobby-cam" onclick="togglePref('cam')" class="size-20 rounded-3xl bg-primary flex items-center justify-center shadow-2xl transition-all hover:-rotate-3">
+                            <span class="material-symbols-outlined text-white text-4xl">videocam</span>
+                        </button>
                     </div>
-                    <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
-                        <span class="material-symbols-outlined">login</span> Join Meeting
-                    </button>
-                </form>
-
-                <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-green-500 font-medium">
-                    <div id="cam-status" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">videocam</span> Camera ready</div>
-                    <div id="mic-status" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">mic</span> Mic connected</div>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3 px-4 py-2 bg-green-500/10 rounded-full border border-green-500/20">
+                            <span class="size-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                            <span class="text-sm font-bold text-green-500 uppercase tracking-widest">Camera Optimized</span>
+                        </div>
+                        <div class="flex items-center gap-3 px-4 py-2 bg-green-500/10 rounded-full border border-green-500/20">
+                            <span class="size-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                            <span class="text-sm font-bold text-green-500 uppercase tracking-widest">Mic Connected</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

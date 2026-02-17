@@ -51,28 +51,47 @@ function addRemoteVideoUI(remoteId, remoteName, stream) {
     if (document.getElementById(`container-${remoteId}`)) return;
 
     const grid = document.getElementById("video-grid");
+
+    // Stitch AI Tasarımı: Container
     const container = document.createElement("div");
     container.id = `container-${remoteId}`;
-    container.className = "relative rounded-xl overflow-hidden bg-zinc-900 aspect-video shadow-2xl border border-white/5 cursor-pointer group";
-    container.onclick = () => container.requestFullscreen ? container.requestFullscreen() : null;
+    container.className = "relative group rounded-[2rem] overflow-hidden bg-zinc-900 border border-white/5 aspect-video shadow-2xl transition-all hover:border-primary/50 hover:scale-[1.02] cursor-pointer active-speaker-glow";
+    container.onclick = () => container.requestFullscreen();
 
+    // Video Elementi
     const video = document.createElement("video");
     video.id = `video-${remoteId}`;
     video.autoplay = true;
     video.playsinline = true;
     video.srcObject = stream;
-    video.className = "w-full h-full object-cover";
+    video.className = "w-full h-full object-cover transition-transform duration-700 group-hover:scale-105";
 
+    // Stitch AI Tarzı İsim Etiketi (Glassmorphism)
     const label = document.createElement("div");
-    label.className = "absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md";
-    label.innerHTML = `<span class="text-xs font-semibold text-white r-name-${remoteId}">${remoteName}</span>`;
+    label.className = "absolute bottom-6 left-6 flex items-center gap-3 px-4 py-2 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl";
+    label.innerHTML = `
+        <span class="material-symbols-outlined text-primary text-sm">equalizer</span>
+        <span class="text-xs font-black tracking-tight text-white uppercase r-name-${remoteId}">${remoteName}</span>
+    `;
+
+    // Hover'da çıkacak aksiyon menüsü (8. fotodaki gibi gizli butonlar)
+    const overlay = document.createElement("div");
+    overlay.className = "absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-6";
+    overlay.innerHTML = `
+        <div class="flex gap-2">
+            <button class="size-10 rounded-xl bg-white/10 backdrop-blur-md hover:bg-primary transition-colors flex items-center justify-center">
+                <span class="material-symbols-outlined text-sm">fullscreen</span>
+            </button>
+        </div>
+    `;
 
     container.appendChild(video);
     container.appendChild(label);
+    container.appendChild(overlay);
     grid.appendChild(container);
+
     updateParticipantList(remoteId, remoteName, true);
 }
-
 function updateParticipantList(id, name, isJoining) {
     const list = document.getElementById("participant-list");
     if (isJoining) {

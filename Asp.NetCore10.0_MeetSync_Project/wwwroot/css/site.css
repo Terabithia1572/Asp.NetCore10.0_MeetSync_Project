@@ -29,3 +29,56 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* Stitch AI Derinlik ve Cam Efektleri */
+.glass-morphism {
+    background: rgba(16, 22, 34, 0.75) !important;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.video-card-glow {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+    .video-card-glow:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px -15px rgba(13, 89, 242, 0.3);
+        border-color: rgba(13, 89, 242, 0.4) !important;
+    }
+
+/* Aktif konuşan kişiye Stitch AI tarzı parlama */
+.active-speaker {
+    box-shadow: 0 0 0 3px #0d59f2, 0 0 30px rgba(13, 89, 242, 0.5) !important;
+}
+
+/* Kaydırma çubuklarını Stitch AI gibi gizle/incelt */
+::-webkit-scrollbar {
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.glass-morphism {
+    background: rgba(18, 18, 22, 0.7) !important;
+    backdrop-filter: blur(25px) saturate(160%);
+    -webkit-backdrop-filter: blur(25px) saturate(160%);
+}
+
+#video-grid {
+    /* Videoların ekranı kaplaması ama birbirine girmemesi için */
+    perspective: 1000px;
+}
+
+.active-speaker-glow {
+    box-shadow: 0 0 0 3px #0d59f2, 0 20px 60px rgba(13, 89, 242, 0.4) !important;
+}
