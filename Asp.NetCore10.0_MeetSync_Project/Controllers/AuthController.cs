@@ -20,7 +20,24 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
                 string username = email.Split('@')[0];
                 HttpContext.Session.SetString("username", username);
 
+                // ✅ AJAX isteği mi kontrol et
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                    Request.Headers.Accept.Contains("application/json"))
+                {
+                    // AJAX için JSON döndür
+                    return Json(new { success = true, redirectUrl = "/Dashboard/Index" });
+                }
+
+                // Normal POST ise redirect yap
                 return RedirectToAction("Index", "Dashboard");
+            }
+
+            // ✅ AJAX isteği mi kontrol et
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                Request.Headers.Accept.Contains("application/json"))
+            {
+                // AJAX için JSON hata döndür
+                return Json(new { success = false, error = "Lütfen e-posta ve şifrenizi kontrol ediniz." });
             }
 
             ViewBag.Error = "Lütfen e-posta ve şifrenizi kontrol ediniz.";

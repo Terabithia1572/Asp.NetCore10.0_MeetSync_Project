@@ -16,10 +16,26 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
         {
             if (string.IsNullOrEmpty(roomName))
             {
+                // ✅ AJAX isteği mi kontrol et
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                    Request.Headers.Accept.Contains("application/json"))
+                {
+                    return Json(new { success = false, error = "Please enter a room name." });
+                }
+
                 ViewBag.Error = "Please enter a room name.";
                 return View("Index");
             }
-            // Meeting sayfasına yönlendiriyoruz
+
+            // ✅ AJAX isteği mi kontrol et
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                Request.Headers.Accept.Contains("application/json"))
+            {
+                // AJAX için JSON döndür
+                return Json(new { success = true, redirectUrl = $"/Meeting/Index?roomName={roomName}" });
+            }
+
+            // Normal POST ise redirect yap — Meeting sayfasına yönlendiriyoruz
             return RedirectToAction("Index", "Meeting", new { roomName = roomName });
         }
     }

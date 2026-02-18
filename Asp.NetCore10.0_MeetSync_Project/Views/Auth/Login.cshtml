@@ -7,7 +7,6 @@
 @section Styles {
     <link href="~/login/style.css" rel="stylesheet" />
     <style>
-        /* Layout'tan gelebilecek çakışmaları önlemek için gövdeyi tam ekran ve flex yapıyoruz */
         html, body {
             height: 100%;
             margin: 0;
@@ -15,10 +14,6 @@
         }
     </style>
 }
-
-@* Body zaten Layout'ta tanımlı olduğu için burada tekrar <body> açmıyoruz kral. 
-   Onun yerine ana kapsayıcıyı (main) ekranın ortasına çekecek bir div kullanıyoruz.
-*@
 
 <div class="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-background-dark font-display">
     
@@ -45,14 +40,15 @@
                 <p class="text-slate-500 text-sm mt-2">Giriş yapmak için bilgilerinizi girin.</p>
             </div>
 
-            @if (ViewBag.Error != null)
-            {
-                <div class="bg-red-500/10 border border-red-500/50 text-red-500 text-xs p-4 rounded-2xl mb-6 text-center animate-pulse">
-                    @ViewBag.Error
-                </div>
-            }
+            @* Hata mesajı alanı *@
+            <div id="error-container" class="hidden bg-red-500/10 border border-red-500/50 text-red-500 text-xs p-4 rounded-2xl mb-6 text-center animate-pulse">
+                <span id="error-text"></span>
+            </div>
 
-            <form asp-controller="Auth" asp-action="Login" method="post" class="space-y-6" id="loginForm" novalidate>
+            @* ✅ AJAX ile submit — sayfa yenilenmeyecek *@
+            <form id="loginForm" class="space-y-6" novalidate>
+
+                @Html.AntiForgeryToken()
 
                 <div class="space-y-2">
                     <label class="text-xs font-bold text-slate-400 ml-1 uppercase tracking-widest">E-posta Adresi</label>
@@ -105,11 +101,11 @@
             </div>
 
             <div class="grid grid-cols-2 gap-4">
-                <button class="flex items-center justify-center h-14 border border-white/5 rounded-2xl bg-white/5 hover:bg-white/10 transition-all gap-3 text-sm font-bold text-white">
+                <button type="button" class="flex items-center justify-center h-14 border border-white/5 rounded-2xl bg-white/5 hover:bg-white/10 transition-all gap-3 text-sm font-bold text-white">
                     <img alt="Google" class="w-5 h-5" src="https://www.google.com/favicon.ico" />
                     Google
                 </button>
-                <button class="flex items-center justify-center h-14 border border-white/5 rounded-2xl bg-white/5 hover:bg-white/10 transition-all gap-3 text-sm font-bold text-white">
+                <button type="button" class="flex items-center justify-center h-14 border border-white/5 rounded-2xl bg-white/5 hover:bg-white/10 transition-all gap-3 text-sm font-bold text-white">
                     <span class="material-symbols-outlined text-xl">grid_view</span>
                     Microsoft
                 </button>
@@ -125,5 +121,83 @@
 </div>
 
 @section Scripts {
-    <script src="~/login/script.js"></script>
+    <script>
+        // ✅ Şifre göster/gizle
+        document.getElementById('togglePassword').addEventListener('click', function () {
+            const input = document.getElementById('password');
+            const icon = document.getElementById('toggleIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.textContent = 'visibility_off';
+            } else {
+                input.type = 'password';
+                icon.textContent = 'visibility';
+            }
+        });
+
+        // ✅ AJAX Login — sayfa yenilenmeden Dashboard'a geç
+        document.getElementById('loginForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            const btnIcon = document.getElementById('btnIcon');
+            const errorContainer = document.getElementById('error-container');
+            const errorText = document.getElementById('error-text');
+
+            // Hata mesajını gizle
+            errorContainer.classList.add('hidden');
+
+            // Basit doğrulama
+            if (!email || !password) {
+                errorText.textContent = 'Lütfen e-posta ve şifrenizi girin.';
+                errorContainer.classList.remove('hidden');
+                return;
+            }
+
+            // Loading durumu
+            btnText.textContent = 'Giriş yapılıyor...';
+            btnIcon.textContent = 'hourglass_empty';
+            submitBtn.disabled = true;
+
+            try {
+                // AntiForgeryToken'ı al
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+                // AJAX POST isteği
+                const response = await fetch('/Auth/Login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'RequestVerificationToken': token
+                    },
+                    body: new URLSearchParams({
+                        email: email,
+                        password: password,
+                        __RequestVerificationToken: token
+                    })
+                });
+
+                if (response.ok) {
+                    // ✅ Başarılı giriş — Dashboard'a yönlendir (sayfa yenilenmeden)
+                    window.location.href = '/Dashboard/Index';
+                } else {
+                    // Hata durumu
+                    errorText.textContent = 'Lütfen e-posta ve şifrenizi kontrol ediniz.';
+                    errorContainer.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                errorText.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.';
+                errorContainer.classList.remove('hidden');
+            } finally {
+                // Loading durumunu kaldır
+                btnText.textContent = 'Giriş Yap';
+                btnIcon.textContent = 'arrow_forward';
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
 }

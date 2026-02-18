@@ -3,11 +3,6 @@
     ViewData["Title"] = "Lobby";
 }
 
-@{
-    Layout = "_MeetSyncLayout";
-    ViewData["Title"] = "Ready to Connect?";
-}
-
 <main class="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 relative overflow-hidden bg-[#09090b]">
     <div class="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px]"></div>
     <div class="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px]"></div>
@@ -23,16 +18,29 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                 
                 <div class="space-y-8 p-4">
-                    <form asp-action="JoinRoom" method="post" class="space-y-6">
+                    @* ✅ AJAX form — sayfa yenilenmeden Meeting'e geç *@
+                    <form id="joinRoomForm" class="space-y-6">
+                        @Html.AntiForgeryToken()
+
+                        @* Hata mesajı alanı *@
+                        <div id="error-container" class="hidden bg-red-500/10 border border-red-500/50 text-red-500 text-xs p-4 rounded-2xl text-center animate-pulse">
+                            <span id="error-text"></span>
+                        </div>
+
                         <div class="space-y-2">
                             <label class="text-sm font-bold text-slate-400 ml-1">MEETING IDENTIFIER</label>
                             <div class="relative group">
                                 <span class="material-symbols-outlined absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-all">link</span>
-                                <input name="roomName" required class="w-full pl-14 pr-6 py-5 bg-zinc-950/50 border border-white/5 rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-white text-lg transition-all placeholder:text-zinc-700" placeholder="e.g. Design-Sync-2026" />
+                                <input name="roomName" id="roomName" required
+                                       class="w-full pl-14 pr-6 py-5 bg-zinc-950/50 border border-white/5 rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-white text-lg transition-all placeholder:text-zinc-700"
+                                       placeholder="e.g. Design-Sync-2026" />
                             </div>
                         </div>
-                        <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-black py-5 rounded-2xl shadow-2xl shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg">
-                            <span class="material-symbols-outlined">bolt</span> JOIN SESSION
+
+                        <button type="submit" id="joinBtn"
+                                class="w-full bg-primary hover:bg-primary/90 text-white font-black py-5 rounded-2xl shadow-2xl shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg">
+                            <span class="material-symbols-outlined" id="joinIcon">bolt</span>
+                            <span id="joinText">JOIN SESSION</span>
                         </button>
                     </form>
                 </div>
@@ -64,6 +72,7 @@
 
 @section Scripts {
     <script>
+        // Mic/Cam preferences
         localStorage.setItem("pref_mic", "true");
         localStorage.setItem("pref_cam", "true");
 
@@ -75,5 +84,68 @@
             btn.classList.toggle("bg-primary", !current);
             btn.querySelector('span').textContent = type === "mic" ? (current ? "mic_off" : "mic") : (current ? "videocam_off" : "videocam");
         }
+
+        // ✅ AJAX Join Room — sayfa yenilenmeden Meeting'e geç
+        document.getElementById('joinRoomForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const roomName = document.getElementById('roomName').value.trim();
+            const joinBtn = document.getElementById('joinBtn');
+            const joinText = document.getElementById('joinText');
+            const joinIcon = document.getElementById('joinIcon');
+            const errorContainer = document.getElementById('error-container');
+            const errorText = document.getElementById('error-text');
+
+            // Hata mesajını gizle
+            errorContainer.classList.add('hidden');
+
+            // Basit doğrulama
+            if (!roomName) {
+                errorText.textContent = 'Please enter a room name.';
+                errorContainer.classList.remove('hidden');
+                return;
+            }
+
+            // Loading durumu
+            joinText.textContent = 'JOINING...';
+            joinIcon.textContent = 'hourglass_empty';
+            joinBtn.disabled = true;
+
+            try {
+                // AntiForgeryToken'ı al
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+                // AJAX POST isteği
+                const response = await fetch('/Dashboard/JoinRoom', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'RequestVerificationToken': token
+                    },
+                    body: new URLSearchParams({
+                        roomName: roomName,
+                        __RequestVerificationToken: token
+                    })
+                });
+
+                if (response.ok) {
+                    // ✅ Başarılı — Meeting'e yönlendir (sayfa yenilenmeden)
+                    window.location.href = '/Meeting/Index?roomName=' + encodeURIComponent(roomName);
+                } else {
+                    // Hata durumu
+                    errorText.textContent = 'Failed to join room. Please try again.';
+                    errorContainer.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('Join room error:', err);
+                errorText.textContent = 'Connection error. Please try again.';
+                errorContainer.classList.remove('hidden');
+            } finally {
+                // Loading durumunu kaldır
+                joinText.textContent = 'JOIN SESSION';
+                joinIcon.textContent = 'bolt';
+                joinBtn.disabled = false;
+            }
+        });
     </script>
 }
