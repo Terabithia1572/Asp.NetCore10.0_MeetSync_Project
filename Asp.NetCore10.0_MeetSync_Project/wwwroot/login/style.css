@@ -1,0 +1,123 @@
+/* ============================================
+   VideoConf Pro — Login Page Styles
+   style.css
+   ============================================ */
+
+/* ---- Material Symbols — İkon olarak doğru render edilmesi için zorunlu ---- */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ---- Base ---- */
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* ---- Glass Card Effect ---- */
+.glass-effect {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- Radial Gradient Background ---- */
+.bg-gradient-radial {
+  background: radial-gradient(
+    circle at center,
+    rgba(13, 89, 242, 0.15) 0%,
+    rgba(9, 9, 11, 0) 70%
+  );
+}
+
+/* ---- Form Input Focus Glow ---- */
+input:focus {
+  box-shadow: 0 0 0 3px rgba(13, 89, 242, 0.2);
+}
+
+/* ---- Sign In Button Hover Effect ---- */
+#submitBtn {
+  position: relative;
+  overflow: hidden;
+}
+
+#submitBtn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#submitBtn:hover::after {
+  opacity: 1;
+}
+
+/* ---- Loading Spinner (JS ile aktif edilir) ---- */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none; /* Varsayılan: gizli */
+}
+
+.spinner.active {
+  display: block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Fade In Animation (sayfa açılışında) ---- */
+main {
+  animation: fadeInUp 0.5s ease forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Error State for Inputs ---- */
+input.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* ---- Error Message Text ---- */
+.error-msg {
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin-top: 0.35rem;
+  display: none;
+}
+
+.error-msg.visible {
+  display: block;
+}
