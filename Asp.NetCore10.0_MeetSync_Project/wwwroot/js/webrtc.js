@@ -189,4 +189,174 @@ function stopShare() {
     isSharing = false;
 }
 
+// ============================================
+// ✅ MEVCUT webrtc.js KODLARININ SONUNA EKLE
+// ============================================
+
+// Global değişkenler
+let allParticipants = [];
+window.isModerator = false;
+window.myConnectionId = null;
+
+// ✅ Participants listesini güncelle
+function updateParticipantListUI(participants) {
+    allParticipants = participants;
+    const ul = document.getElementById('participants-ul');
+    const count = document.getElementById('participant-count');
+    const panelCount = document.getElementById('participantsPanelCount');
+
+    count.textContent = participants.length === 1 ? '1 Participant' : `${participants.length} Participants`;
+    panelCount.textContent = `${participants.length} in room`;
+
+    ul.innerHTML = participants.map(p => `
+        <li class="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/30 transition-all">
+            <div class="size-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <span class="material-symbols-outlined text-primary text-2xl">person</span>
+            </div>
+            <div class="flex-1">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-bold text-white r-name-${p.connectionId}">${p.userName}</span>
+                    ${p.isModerator ? '<span class="text-[9px] font-black tracking-wider bg-primary/20 text-primary px-2 py-0.5 rounded-full">MOD</span>' : ''}
+                    ${p.connectionId === window.myConnectionId ? '<span class="text-[9px] font-black tracking-wider bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">YOU</span>' : ''}
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    <span class="inline-block size-2 rounded-full bg-green-500 animate-pulse mr-1"></span>
+                    Connected
+                </p>
+            </div>
+        </li>
+    `).join('');
+}
+
+// ✅ İsim değiştirme
+function changeMyName() {
+    const newName = prompt('Enter your new name:', userName);
+    if (newName && newName.trim() !== '') {
+        userName = newName.trim();
+        document.getElementById('local-name-label').textContent = userName.toUpperCase() + ' (YOU)';
+        connection.invoke("UpdateUserName", roomName, userName).catch(err => console.error(err));
+    }
+}
+
+// ✅ Moderatör modal'ını göster
+function showModeratorModal(participants) {
+    const modal = document.getElementById('moderatorModal');
+    const candidates = document.getElementById('moderatorCandidates');
+
+    // Kendisi hariç diğer katılımcılar
+    const others = participants.filter(p => p.connectionId !== window.myConnectionId);
+
+    if (others.length === 0) {
+        // Kimse kalmadı, direkt toplantıyı bitir
+        endMeetingForAll();
+        return;
+    }
+
+    candidates.innerHTML = others.map(p => `
+        <button onclick="assignModerator('${p.connectionId}')" 
+                class="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-primary/10 border border-white/5 hover:border-primary/30 transition-all text-left">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                <span class="material-symbols-outlined text-primary">person</span>
+            </div>
+            <div class="flex-1">
+                <span class="text-sm font-bold text-white">${p.userName}</span>
+                <p class="text-xs text-slate-500">Assign as moderator</p>
+            </div>
+            <span class="material-symbols-outlined text-slate-500">arrow_forward</span>
+        </button>
+    `).join('');
+
+    modal.classList.remove('hidden');
+}
+
+function assignModerator(connectionId) {
+    connection.invoke("AssignModerator", roomName, connectionId).catch(err => console.error(err));
+    document.getElementById('moderatorModal').classList.add('hidden');
+    window.location.href = '/Dashboard';
+}
+
+function cancelLeave() {
+    document.getElementById('moderatorModal').classList.add('hidden');
+}
+
+function endMeetingForAll() {
+    connection.invoke("EndMeeting", roomName).catch(err => console.error(err));
+    window.location.href = '/Dashboard';
+}
+
+function endMeetingConfirm() {
+    if (confirm('Are you sure you want to end the meeting for everyone?')) {
+        endMeetingForAll();
+    }
+}
+
+function leaveMeeting() {
+    // Eğer moderatörse modal göster
+    if (window.isModerator && allParticipants.length > 1) {
+        showModeratorModal(allParticipants);
+    } else {
+        // Normal kullanıcı, direkt çık
+        window.location.href = '/Dashboard';
+    }
+}
+
+// ✅ SignalR event listener'ları — MEVCUT connection objesine ekle
+
+// Moderatör durumu
+connection.on("ModeratorStatus", (status) => {
+    window.isModerator = status;
+    const endBtn = document.getElementById('btn-end-meeting');
+    if (status && endBtn) {
+        endBtn.classList.remove('hidden');
+    }
+});
+
+// Katılımcı listesi güncellendi
+connection.on("UpdateParticipants", (participants) => {
+    console.log("Participants updated:", participants);
+    updateParticipantListUI(participants);
+});
+
+// İsim güncellendi
+connection.on("UserNameUpdated", (connectionId, newName) => {
+    console.log(`User name updated: ${connectionId} -> ${newName}`);
+
+    // Video container'daki ismi güncelle
+    const nameElements = document.querySelectorAll(`.r-name-${connectionId}`);
+    nameElements.forEach(el => {
+        el.textContent = newName.toUpperCase();
+    });
+});
+
+// Moderatör değişti
+// Moderatör değişti
+connection.on("ModeratorChanged", (newModConnectionId) => {
+    console.log(`New moderator: ${newModConnectionId}`);
+    if (newModConnectionId === window.myConnectionId) {
+        window.isModerator = true;
+        const endBtn = document.getElementById('btn-end-meeting');
+        if (endBtn) {
+            endBtn.classList.remove('hidden');
+        }
+        alert('You are now the moderator of this meeting.');
+    }
+});
+
+// Toplantı bitti
+connection.on("RoomClosedByModerator", () => {
+    alert("Meeting has been ended by the moderator.");
+    window.location.href = '/Dashboard';
+});
+
+// Connection ID'yi kaydet
+connection.onreconnected(() => {
+    window.myConnectionId = connection.connectionId;
+});
+
+// İlk bağlantıda ID'yi kaydet
+if (connection.connectionId) {
+    window.myConnectionId = connection.connectionId;
+}
+
+
 init();
