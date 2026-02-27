@@ -1,6 +1,6 @@
 ﻿@{
     Layout = "_MeetSyncLayout";
-    ViewData["Title"] = "Lobby";
+    ViewData["Title"] = "Lobi";
 }
 
 <main class="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 relative overflow-hidden bg-[#09090b]">
@@ -9,16 +9,15 @@
 
     <div class="w-full max-w-4xl space-y-12 relative z-10">
         <div class="text-center space-y-4">
-            <h2 class="text-primary font-bold text-lg tracking-[0.2em] uppercase">ConnectPro Platform</h2>
-            <h3 class="text-5xl md:text-7xl font-black tracking-tighter text-white">Ready to connect?</h3>
-            <p class="text-slate-400 text-lg max-w-md mx-auto">Elevate your remote collaboration with high-fidelity sync.</p>
+            <h2 class="text-primary font-bold text-lg tracking-[0.2em] uppercase">ConnectPro Platformu</h2>
+            <h3 class="text-5xl md:text-7xl font-black tracking-tighter text-white">Bağlanmaya hazır mısın?</h3>
+            <p class="text-slate-400 text-lg max-w-md mx-auto">Yüksek kaliteli senkronizasyon ile uzaktan iş birliğini zirveye taşıyın.</p>
         </div>
 
         <div class="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-2 md:p-10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)]">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                 
                 <div class="space-y-8 p-4">
-                    @* ✅ AJAX form — sayfa yenilenmeden Meeting'e geç *@
                     <form id="joinRoomForm" class="space-y-6">
                         @Html.AntiForgeryToken()
 
@@ -28,19 +27,19 @@
                         </div>
 
                         <div class="space-y-2">
-                            <label class="text-sm font-bold text-slate-400 ml-1">MEETING IDENTIFIER</label>
+                            <label class="text-sm font-bold text-slate-400 ml-1">TOPLANTI KİMLİĞİ (ID)</label>
                             <div class="relative group">
                                 <span class="material-symbols-outlined absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-all">link</span>
                                 <input name="roomName" id="roomName" required
                                        class="w-full pl-14 pr-6 py-5 bg-zinc-950/50 border border-white/5 rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-white text-lg transition-all placeholder:text-zinc-700"
-                                       placeholder="e.g. Design-Sync-2026" />
+                                       placeholder="Örn: Tasarim-Toplantisi-2026" />
                             </div>
                         </div>
 
                         <button type="submit" id="joinBtn"
                                 class="w-full bg-primary hover:bg-primary/90 text-white font-black py-5 rounded-2xl shadow-2xl shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg">
                             <span class="material-symbols-outlined" id="joinIcon">bolt</span>
-                            <span id="joinText">JOIN SESSION</span>
+                            <span id="joinText">OTURUMA KATIL</span>
                         </button>
                     </form>
                 </div>
@@ -57,11 +56,11 @@
                     <div class="space-y-3">
                         <div class="flex items-center gap-3 px-4 py-2 bg-green-500/10 rounded-full border border-green-500/20">
                             <span class="size-2.5 rounded-full bg-green-500 animate-pulse"></span>
-                            <span class="text-sm font-bold text-green-500 uppercase tracking-widest">Camera Optimized</span>
+                            <span class="text-sm font-bold text-green-500 uppercase tracking-widest">Kamera Optimize Edildi</span>
                         </div>
                         <div class="flex items-center gap-3 px-4 py-2 bg-green-500/10 rounded-full border border-green-500/20">
                             <span class="size-2.5 rounded-full bg-green-500 animate-pulse"></span>
-                            <span class="text-sm font-bold text-green-500 uppercase tracking-widest">Mic Connected</span>
+                            <span class="text-sm font-bold text-green-500 uppercase tracking-widest">Mikrofon Bağlı</span>
                         </div>
                     </div>
                 </div>
@@ -85,7 +84,6 @@
             btn.querySelector('span').textContent = type === "mic" ? (current ? "mic_off" : "mic") : (current ? "videocam_off" : "videocam");
         }
 
-        // ✅ AJAX Join Room — sayfa yenilenmeden Meeting'e geç
         document.getElementById('joinRoomForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
@@ -96,26 +94,22 @@
             const errorContainer = document.getElementById('error-container');
             const errorText = document.getElementById('error-text');
 
-            // Hata mesajını gizle
             errorContainer.classList.add('hidden');
 
-            // Basit doğrulama
             if (!roomName) {
-                errorText.textContent = 'Please enter a room name.';
+                errorText.textContent = 'Lütfen bir oda adı giriniz.';
                 errorContainer.classList.remove('hidden');
                 return;
             }
 
-            // Loading durumu
-            joinText.textContent = 'JOINING...';
+            // Yükleniyor durumu
+            joinText.textContent = 'KATILINIYOR...';
             joinIcon.textContent = 'hourglass_empty';
             joinBtn.disabled = true;
 
             try {
-                // AntiForgeryToken'ı al
                 const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
-                // AJAX POST isteği
                 const response = await fetch('/Dashboard/JoinRoom', {
                     method: 'POST',
                     headers: {
@@ -129,20 +123,17 @@
                 });
 
                 if (response.ok) {
-                    // ✅ Başarılı — Meeting'e yönlendir (sayfa yenilenmeden)
                     window.location.href = '/Meeting/Index?roomName=' + encodeURIComponent(roomName);
                 } else {
-                    // Hata durumu
-                    errorText.textContent = 'Failed to join room. Please try again.';
+                    errorText.textContent = 'Odaya katılamadınız. Lütfen tekrar deneyin.';
                     errorContainer.classList.remove('hidden');
                 }
             } catch (err) {
                 console.error('Join room error:', err);
-                errorText.textContent = 'Connection error. Please try again.';
+                errorText.textContent = 'Bağlantı hatası oluştu. Lütfen tekrar deneyin.';
                 errorContainer.classList.remove('hidden');
             } finally {
-                // Loading durumunu kaldır
-                joinText.textContent = 'JOIN SESSION';
+                joinText.textContent = 'OTURUMA KATIL';
                 joinIcon.textContent = 'bolt';
                 joinBtn.disabled = false;
             }
