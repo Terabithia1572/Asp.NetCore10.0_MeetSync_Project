@@ -1,24 +1,33 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using MeetSync.Application.DTOs.Room;
+using MeetSync.Application.Interfaces;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Asp.NetCore10._0_MeetSync_Project.Controllers
 {
     public class DashboardController : Controller
     {
+        private readonly IMeetingService _meetingService;
+
+        public DashboardController(IMeetingService meetingService)
+        {
+            _meetingService = meetingService;
+        }
+
         public IActionResult Index()
         {
-            // Session'dan kullanıcı ismini alıp View'a yolluyoruz (Welcome Alex kısmı için)
             ViewBag.UserName = HttpContext.Session.GetString("username") ?? "User";
             return View();
         }
 
         [HttpPost]
-        public IActionResult JoinRoom(string roomName)
+        public async Task<IActionResult> JoinRoom([FromForm] JoinRoomRequestDto request, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrEmpty(roomName))
+            var isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                         Request.Headers.Accept.ToString().Contains("application/json");
+
+            if (string.IsNullOrWhiteSpace(request.RoomName))
             {
-                // ✅ AJAX isteği mi kontrol et
-                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
-                    Request.Headers.Accept.Contains("application/json"))
+                if (isAjax)
                 {
                     return Json(new { success = false, error = "Please enter a room name." });
                 }
@@ -27,16 +36,14 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
                 return View("Index");
             }
 
-            // ✅ AJAX isteği mi kontrol et
-            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
-                Request.Headers.Accept.Contains("application/json"))
+            var room = await _meetingService.PrepareMeetingRoomAsync(request, cancellationToken);
+
+            if (isAjax)
             {
-                // AJAX için JSON döndür
-                return Json(new { success = true, redirectUrl = $"/Meeting/Index?roomName={roomName}" });
+                return Json(new { success = true, redirectUrl = $"/Meeting/Index?roomName={Uri.EscapeDataString(room.Name)}" });
             }
 
-            // Normal POST ise redirect yap — Meeting sayfasına yönlendiriyoruz
-            return RedirectToAction("Index", "Meeting", new { roomName = roomName });
+            return RedirectToAction("Index", "Meeting", new { roomName = room.Name });
         }
     }
 }

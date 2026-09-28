@@ -1,4 +1,4 @@
-﻿@{
+@{
     Layout = "_MeetSyncLayout";
     ViewData["Title"] = "Toplantı: " + ViewBag.RoomName;
 }
@@ -172,14 +172,22 @@
         </div>
         <div>
             <h1 class="text-white text-sm font-bold leading-tight tracking-tight uppercase opacity-60">MeetSync Pro</h1>
-            <h2 class="text-white text-base font-semibold leading-tight">Oda: @ViewBag.RoomName</h2>
+            <h2 class="text-white text-base font-semibold leading-tight flex items-center gap-3">
+                Oda: @ViewBag.RoomName
+                <div id="rec-badge" class="hidden flex items-center gap-2 px-3 py-1 bg-red-600/20 border border-red-500/30 rounded-full animate-pulse">
+                    <span class="size-2 rounded-full bg-red-500"></span>
+                    <span class="text-xs font-black text-red-500 tracking-wider">REC</span>
+                </div>
+            </h2>
         </div>
     </div>
 
-    <button id="toggleParticipants" class="px-4 py-2 rounded-full bg-white/5 border border-white/10 flex items-center gap-2 hover:bg-white/10 transition-all cursor-pointer">
-        <span class="material-symbols-outlined text-xs text-primary">groups</span>
-        <span id="participant-count" class="text-xs font-bold text-white">1 Katılımcı</span>
-    </button>
+    <div class="flex items-center gap-3">
+        <button id="toggleParticipants" class="px-4 py-2 rounded-full bg-white/5 border border-white/10 flex items-center gap-2 hover:bg-white/10 transition-all cursor-pointer">
+            <span class="material-symbols-outlined text-xs text-primary">groups</span>
+            <span id="participant-count" class="text-xs font-bold text-white">1 Katılımcı</span>
+        </button>
+    </div>
 </header>
 
 <main class="flex h-[calc(100vh-64px)] overflow-hidden bg-[#050505] relative font-display">
@@ -198,7 +206,13 @@
 
         </div>
 
-        <!-- ══════════════ YENİ TOOLBAR ══════════════ -->
+        <!-- Live Captions Banner Overlay -->
+        <div id="live-caption-overlay" class="hidden absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-2xl px-6 py-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl text-center shadow-2xl transition-all">
+            <span id="caption-speaker" class="text-xs font-black text-primary uppercase mr-2"></span>
+            <span id="caption-text" class="text-sm font-medium text-white"></span>
+        </div>
+
+        <!-- TOOLBAR -->
         <div class="toolbar-wrap" id="meetingToolbar">
 
             <!-- Mikrofon -->
@@ -218,7 +232,27 @@
                 <span class="material-symbols-outlined" id="share-icon">present_to_all</span>
             </button>
 
-            <!-- Sohbet — DÜZELTİLDİ: "oriented" → "outlined" -->
+            <!-- Closed Captions / Canlı Altyazı -->
+            <button id="btn-cc" class="tb-icon" onclick="toggleClosedCaptions()" title="Canlı Altyazı (CC)">
+                <span class="material-symbols-outlined" id="cc-icon">subtitles</span>
+            </button>
+
+            <!-- AI Özet Oluştur (Moderatör için) -->
+            <button id="btn-ai-summary" class="tb-icon hidden" onclick="generateAiSummary()" title="Yapay Zeka Özeti Üret">
+                <span class="material-symbols-outlined text-purple-400">auto_awesome</span>
+            </button>
+
+            <!-- Kaydı Başlat/Durdur (Moderatör için) -->
+            <button id="btn-rec" class="tb-icon hidden" onclick="toggleRecording()" title="Kaydı Başlat/Durdur">
+                <span class="material-symbols-outlined text-red-500" id="rec-icon">fiber_manual_record</span>
+            </button>
+
+            <!-- Odayı Kilitle (Moderatör için) -->
+            <button id="btn-lock-room" class="tb-icon hidden" onclick="toggleRoomLock()" title="Odayı Kilitle/Aç">
+                <span class="material-symbols-outlined">lock</span>
+            </button>
+
+            <!-- Sohbet -->
             <button onclick="toggleSidebar('chat')" class="tb-chat" title="Sohbet">
                 <span class="material-symbols-outlined">chat_bubble</span>
                 <span>Sohbet</span>
@@ -227,7 +261,7 @@
 
             <div class="tb-divider"></div>
 
-            <!-- Toplantıyı Bitir (sadece host için webrtc.js'de .hidden kaldırılır) -->
+            <!-- Toplantıyı Bitir (Moderatör için) -->
             <button id="btn-end-meeting" class="tb-end hidden" onclick="endMeetingConfirm()">
                 <span class="material-symbols-outlined">cancel</span>
                 <span>Bitir</span>
@@ -294,13 +328,53 @@
     </div>
 </div>
 
+<!-- AI Summary Modal -->
+<div id="aiSummaryModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-[150] flex items-center justify-center p-6">
+    <div class="bg-zinc-900 border border-purple-500/20 rounded-3xl p-8 max-w-2xl w-full shadow-2xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between pb-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="size-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                    <span class="material-symbols-outlined text-purple-400">auto_awesome</span>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-white">Yapay Zeka Toplantı Özeti</h3>
+                    <p class="text-xs text-slate-400" id="aiSummaryTimestamp">Oluşturuldu: Şimdi</p>
+                </div>
+            </div>
+            <button onclick="closeAiSummaryModal()" class="text-slate-400 hover:text-white transition-colors">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto py-6 space-y-6">
+            <div>
+                <h4 class="text-xs font-black tracking-wider text-purple-400 uppercase mb-2">Genel Özet</h4>
+                <p id="aiSummaryText" class="text-sm text-slate-300 bg-white/5 p-4 rounded-2xl border border-white/5 leading-relaxed"></p>
+            </div>
+
+            <div>
+                <h4 class="text-xs font-black tracking-wider text-green-400 uppercase mb-2">Alınan Kararlar</h4>
+                <ul id="aiKeyDecisions" class="space-y-2 text-sm text-slate-300"></ul>
+            </div>
+
+            <div>
+                <h4 class="text-xs font-black tracking-wider text-blue-400 uppercase mb-2">Aksiyon Maddeleri</h4>
+                <ul id="aiActionItems" class="space-y-2 text-sm text-slate-300"></ul>
+            </div>
+        </div>
+
+        <div class="pt-4 border-t border-white/10 flex justify-end">
+            <button onclick="closeAiSummaryModal()" class="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all">Tamam</button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script src="~/lib/microsoft/signalr/dist/browser/signalr.js"></script>
     <script>
         const roomName = "@ViewBag.RoomName";
         let userName = "@ViewBag.UserName";
 
-        // Panel toggle
         document.getElementById('toggleParticipants').addEventListener('click', () => {
             const panel = document.getElementById('participants-panel');
             const chat  = document.getElementById('sidebar');
@@ -325,7 +399,6 @@
             }
         }
 
-        // Toolbar toggles
         document.getElementById('btn-mic').addEventListener('click', () => {
             const btn = document.getElementById('btn-mic');
             const icon = document.getElementById('mic-icon');
@@ -352,7 +425,6 @@
             icon.textContent = isOn ? 'present_to_all' : 'cancel_presentation';
         });
 
-        // Yeni mesaj gelince webrtc.js içinden çağır: showChatBadge()
         function showChatBadge() {
             document.querySelector('.tb-chat')?.classList.add('has-unread');
         }

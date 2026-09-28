@@ -1,39 +1,37 @@
-﻿using MeetSync.Domain.Entities;
-using MeetSync.Infrastructure.Persistence;
+using MeetSync.Application.DTOs.Room;
+using MeetSync.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asp.NetCore10._0_MeetSync_Project.Controllers
 {
     public class RoomController : Controller
     {
-        private readonly MeetSyncDbContext _context;
+        private readonly IRoomService _roomService;
 
-        public RoomController(MeetSyncDbContext context)
+        public RoomController(IRoomService roomService)
         {
-            _context = context;
+            _roomService = roomService;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(string name)
+        public async Task<IActionResult> Create([FromForm] CreateRoomRequestDto request, CancellationToken cancellationToken)
         {
-            var room = new Room
-            {
-                Id = Guid.NewGuid(),
-                Name = name,
-                CreatedBy = Guid.NewGuid()
-            };
+            var userIdString = HttpContext.Session.GetString("userId");
+            Guid? hostUserId = Guid.TryParse(userIdString, out var parsedGuid) ? parsedGuid : null;
 
-            _context.Rooms.Add(room);
-            await _context.SaveChangesAsync();
+            var createDto = request with { CreatedBy = hostUserId };
+            var room = await _roomService.CreateRoomAsync(createDto, cancellationToken);
 
-            return Redirect($"/room/{room.Id}");
+            return RedirectToAction("Index", new { id = room.Id });
         }
 
         [Route("room/{id:guid}")]
-        public IActionResult Index(Guid id)
+        public async Task<IActionResult> Index(Guid id, CancellationToken cancellationToken)
         {
-            ViewBag.RoomId = id;
-            return View();
+            var room = await _roomService.GetRoomByIdAsync(id, cancellationToken);
+            if (room == null) return NotFound();
+
+            return RedirectToAction("Index", "Meeting", new { roomName = room.Name });
         }
     }
 }

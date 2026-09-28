@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MeetSync.Domain.Entities;
 
 namespace MeetSync.Infrastructure.Persistence;
@@ -14,6 +14,9 @@ public class MeetSyncDbContext : DbContext
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<RoomParticipant> Participants => Set<RoomParticipant>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<MeetingRecording> Recordings => Set<MeetingRecording>();
+    public DbSet<MeetingTranscript> Transcripts => Set<MeetingTranscript>();
+    public DbSet<MeetingSummary> Summaries => Set<MeetingSummary>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,5 +41,20 @@ public class MeetSyncDbContext : DbContext
             .HasOne(m => m.User)
             .WithMany()
             .HasForeignKey(m => m.UserId);
+
+        modelBuilder.Entity<MeetingRecording>()
+            .HasOne(mr => mr.Room)
+            .WithMany()
+            .HasForeignKey(mr => mr.RoomId);
+
+        modelBuilder.Entity<MeetingTranscript>()
+            .HasOne(mt => mt.Room)
+            .WithMany()
+            .HasForeignKey(mt => mt.RoomId);
+
+        modelBuilder.Entity<MeetingSummary>()
+            .HasOne(ms => ms.Room)
+            .WithMany()
+            .HasForeignKey(ms => ms.RoomId);
     }
 }
