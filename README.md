@@ -1,4 +1,4 @@
-# Terabithia Sync — MeetSync Pro
+# MeetSync Pro
 
 [TR: Türkçe](#türkçe) | [EN: English](#english)
 
@@ -9,16 +9,16 @@
 
 ## 1. Proje Başlığı ve Tanıtım
 
-**Terabithia Sync — MeetSync Pro**, modern web teknolojileri (ASP.NET Core 10, SignalR ve WebRTC) üzerinde geliştirilmiş, yüksek performanslı, güvenli ve düşük gecikmeli gerçek zamanlı görüntülü toplantı, sesli iletişim, ekran paylaşımı ve moderasyon platformudur.
+**MeetSync Pro**, modern web teknolojileri (ASP.NET Core 10, SignalR ve WebRTC) üzerinde geliştirilmiş, yüksek performanslı, güvenli ve düşük gecikmeli gerçek zamanlı görüntülü toplantı, sesli iletişim, ekran paylaşımı ve moderasyon platformudur.
 
 ### Çözdüğü Problem
-Geleneksel toplantı yazılımlarının gerektirdiği ağır masaüstü istemcileri, yüksek sunucu bant genişliği maliyetleri ve karmaşık lisanslama modellerine alternatif olarak; tamamen tarayıcı tabanlı (Peer-to-Peer), doğrudan uçtan uca şifrelenmiş medya aktarımı ve kurumsal seviyede katmanlı Clean Architecture mimarisi sunar.
+Geleneksel toplantı yazılımlarının gerektirdiği ek masaüstü istemcileri ve yüksek sunucu altyapı maliyetlerine alternatif olarak; tamamen tarayıcı tabanlı (Peer-to-Peer), doğrudan kullanıcılar arası şifreli medya aktarımı ve katmanlı Clean Architecture mimarisi sunar.
 
 ### Öne Çıkan Değerler
-- **Doğrudan Tarayıcı İletişimi**: WebRTC P2P (RTCPeerConnection) altyapısı sayesinde görüntü ve ses aktarımı sunucu yükünü minimuma indirir.
+- **Doğrudan Tarayıcı İletişimi**: WebRTC P2P (`RTCPeerConnection`) altyapısı sayesinde görüntü ve ses aktarımı sunucu medya yükünü minimuma indirir.
 - **Gerçek Zamanlı Moderasyon**: Odaları kilitleme, katılımcıları susturma/odadan çıkarma, moderatör yetkisi devretme ve bekleme odası (lobi) yönetimi.
-- **Sunucu Taraflı Toplantı Kaydı**: Katılımcı akışlarını 1280x720 (720p) çözünürlükte WebM biçiminde kesintisiz birleştirip kaydetme.
-- **Yüksek Çözünürlüklü Ekran Paylaşımı**: 480p'den 4K (UHD 3840x2160) çözünürlüğe kadar dinamik ekran yayın kalitesi seçimi.
+- **Toplantı Kaydı**: Katılımcı ses ve görüntü akışlarını tarayıcı üzerinde parçalayıp (12 KiB chunks) REST API üzerinden sunucuya göndererek WebM biçiminde birleştirme.
+- **Esnek Ekran Paylaşımı**: 480p'den 4K (3840x2160) çözünürlüğe kadar dinamik ekran yayın kalitesi seçimi.
 
 **Geliştirici**: Yunus İNAN ([GitHub Profili](https://github.com/Terabithia1572))
 
@@ -61,10 +61,10 @@ Uygulamanın yenilenen arayüz bileşenleri ve kullanıcı deneyimi görselleri 
 | ![Moderatör Paneli](screenshots/moderator-controls.png) | **Moderatör Kontrolleri**: Susturma, atma, odayı kilitleme ve kayıt başlatma butonları. |
 | ![Medya Kontrolleri](screenshots/media-controls.png) | **Medya Araç Çubuğu**: Mikrofon, kamera ve ekran paylaşımı hızlı açma/kapama. |
 | ![Kalite Seçici Menu](screenshots/screen-quality-menu.png) | **Kalite Seçim Paneli**: 480p, 720p, 1080p, 2K ve 4K ekran paylaşımı kalite menüsü. |
-| ![Ekran Paylaşımı](screenshots/screen-sharing.png) | **Canlı Ekran Paylaşımı**: Yüksek kare hızlı canlı ekran yayını ve kompakt kalite rozeti. |
+| ![Ekran Paylaşımı](screenshots/screen-sharing.png) | **Canlı Ekran Paylaşımı**: Canlı ekran yayını ve kompakt kalite rozeti. |
 | ![Toplantı Kaydı](screenshots/meeting-recording.png) | **Toplantı Kaydı**: Canlı kayıt göstergesi, süre takibi ve indirme bağlantısı. |
 | ![AI Özeti](screenshots/ai-summary.png) | **AI Toplantı Özeti**: Otomatik canlı altyazı ve NLP tabanlı toplantı özeti. |
-| ![Sohbet](screenshots/chat.png) | **Toplantı İçi Sohbet**: Anlık mesajlaşma ve dosya/bağlantı paylaşım paneli. |
+| ![Sohbet](screenshots/chat.png) | **Toplantı İçi Sohbet**: Anlık mesajlaşma paneli. |
 
 ---
 
@@ -77,16 +77,15 @@ Uygulamanın yenilenen arayüz bileşenleri ve kullanıcı deneyimi görselleri 
    - Aynı isimde aktif bir oda bulunuyorsa yeni oda oluşturulmaz; kullanıcı mevcut aktif odaya yönlendirilir.
    - Eşzamanlı oluşturma isteklerinde veritabanı düzeyinde `sys.sp_getapplock` kilit mekanizması kullanılır.
    - Oda adlarında boşluklar temizlenir (`FormC` Unicode normalizasyonu) ve Türkçe harf duyarlı (`Turkish_100_CI_AS`) birebir karşılaştırma yapılır.
-   - SQL `LIKE` arama Joker karakteri riski oluşturan alt çizgi (`_`) gibi karakterler düzgün işlenir.
+   - SQL Joker karakter riski oluşturan alt çizgi (`_`) gibi karakterler filtrelenir.
 
-2. **Toplantı Kayıt Motoru (MediaRecorder Stream Chunking)**:
-   - Moderatör tarafından tek tıkla başlatılıp durdurulabilir.
-   - Katılımcı görüntü ve sesleri sunucuya 12 KiB'lık parçalar (chunks) halinde aktarılır ve `wwwroot/recordings` dizininde 1280x720 (720p) standart WebM biçiminde birleştirilir.
-   - Ekran paylaşımı çözünürlüğünden bağımsız olarak sabit kayıt çözünürlüğü korunur.
+2. **Toplantı Kayıt Servisi (MediaRecorder Stream Chunking)**:
+   - Moderatör tarafından başlatılıp durdurulabilir.
+   - Katılımcı medya parçaları tarayıcıda `MediaRecorder` ile 12 KiB dilimler halinde işlenip REST API üzerinden sunucudaki `MeetingRecordingService` servisine aktarılır ve `wwwroot/recordings` dizininde 1280x720 (720p) standart WebM biçiminde saklanır.
    - Kayıt tamamlandığında kullanıcıya otomatik indirme bağlantısı sağlanır.
 
 3. **Gelişmiş Ekran Paylaşımı ve Kalite Seçimi**:
-   - Dynamic WebRTC SDP yeniden anlaşma (re-negotiation) ile yayın sırasında kalite değiştirme:
+   - `getUserMedia` kısıtlamaları ve WebRTC `RTCRtpSender.replaceTrack` ile yayın sırasında dinamik çözünürlük seçimi:
      - **480p**: 854 × 480 @ 30 FPS
      - **720p**: 1280 × 720 @ 30 FPS
      - **1080p**: 1920 × 1080 @ 30 FPS
@@ -96,20 +95,13 @@ Uygulamanın yenilenen arayüz bileşenleri ve kullanıcı deneyimi görselleri 
    - Sonradan katılan katılımcılara devam eden ekran paylaşım yayınının otomatik iletilmesi.
 
 4. **Oda Kilitleme (Room Locking)**:
-   - Araç çubuğuyla entegre yazısız kilit düğmesi (Açık/Kapalı durum renk değişimi ve tooltip açıklaması).
+   - Araç çubuğuyla entegre kilit düğmesi (Açık/Kapalı durum renk değişimi ve tooltip açıklaması).
    - Sunucu tarafı onaylı (SignalR Hub & Room Service) kilit durumu doğrulaması. Kilitli odaya yeni katılımcı kabul edilmez.
 
 5. **Moderatör ve Katılımcı Rol Yönetimi**:
-   - Düğme görünürlüğü evrenseldir; ancak yetki gerektiren butonlar (Kayıt, Oda Kilidi, Herkesi Sustur, Toplantıyı Bitir) moderatörde aktif, katılımcıda açıklamalı Pasif durumdadır.
+   - Düğme görünürlüğü evrenseldir; ancak yetki gerektiren butonlar (Kayıt, Oda Kilidi, Herkesi Sustur, Toplantıyı Bitir) moderatörde aktif, katılımcıda açıklamalı pasif durumdadır.
    - Rol Göstergesi: `"Siz: Moderatör"` / `"Siz: Katılımcı"`.
    - Moderatör ayrıldığında otomatik yetki devri ve arayüz güncellenmesi.
-
-### 🚀 Temel Özellikler
-- **Kimlik Doğrulama**: Session tabanlı güvenli oturum yönetimi.
-- **WebRTC P2P Görüntü/Ses**: WebRTC `RTCPeerConnection` altyapısı ile doğrudan tarayıcılar arası yayın.
-- **SignalR Sinyalleşme**: Düşük gecikmeli WebRTC SDP Offer/Answer ve ICE Candidate değişimi.
-- **Toplantı İçi Sohbet**: Gerçek zamanlı mesajlaşma altyapısı.
-- **Bekleme Odası (Lobi)**: Katılımcı kabul onay mekanizması.
 
 ---
 
@@ -184,8 +176,8 @@ MeetSync/
    - Yeni katılan istemci odadaki diğer katılımcılar için WebRTC `RTCPeerConnection` nesneleri oluşturur.
    - SignalR üzerinden `Offer`, `Answer` ve `ICE Candidate` paketleri aktarılır.
    - Medya aktarımı doğrudan istemciler arasında P2P olarak başlar.
-5. **Ekran Paylaşımı & Kalite Değişimi**: Ekran yayıncısı çözünürlük seçtiğinde `getUserMedia` akışı güncellenir ve WebRTC izleri (tracks) dinamik olarak değiştirilir.
-6. **Kayıt & Moderasyon**: Moderatör kaydı başlattığında istemci taraflı kanvas/medya birleştirici 12 KiB'lık parçaları REST API üzerinden `MeetingRecordingService` servisine yükler.
+5. **Ekran Paylaşımı & Kalite Değişimi**: Ekran yayıncısı çözünürlük seçtiğinde `getUserMedia` akışı güncellenir ve WebRTC sender izleri (tracks) dinamik olarak değiştirilir.
+6. **Kayıt & Moderasyon**: Moderatör kaydı başlattığında istemci taraflı medya birleştirici 12 KiB'lık parçaları REST API üzerinden `MeetingRecordingService` servisine yükler.
 
 ---
 
@@ -294,8 +286,8 @@ dotnet test
 
 <a name="13-bilinen-sınırlamalar-tr"></a>
 ## 13. Bilinen Sınırlamalar (TR)
-- Ekran paylaşımı çözünürlük seçenekleri (4K, 2K vb.) üst sınırdır; istemcinin ekran donanımı veya tarayıcı kısıtlamalarına göre dinamik olarak en yakın çözünürlüğe ölçeklenir.
-- P2P bağlantıları NAT arkasındaki karmaşık ağlarda TURN sunucusu gerektirebilir (Varsayılan kurulum STUN kullanır).
+- Ekran paylaşımı çözünürlük seçenekleri (4K, 2K vb.) hedef sınırları temsil eder; istemcinin ekran donanımı veya tarayıcı kısıtlamalarına göre dinamik olarak en yakın çözünürlüğe ölçeklenir.
+- P2P bağlantıları simetrik NAT arkasındaki karmaşık ağlarda TURN sunucusu gerektirebilir (Varsayılan kurulum STUN kullanır).
 
 ---
 
@@ -320,7 +312,7 @@ dotnet test
 <a name="16-lisans-ve-telif-tr"></a>
 ## 16. Lisans ve Telif (TR)
 
-Bu proje **Yunus İNAN** tarafından geliştirilmiştir ve Türkçe ve İngilizce metinleri sunulan **MIT Lisansı** kapsamında yayımlanmıştır. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakabilirsiniz.
+Bu proje **Yunus İNAN** tarafından geliştirilmiştir. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakabilirsiniz.
 
 Copyright (c) 2026 Yunus İNAN.
 
@@ -332,15 +324,15 @@ Copyright (c) 2026 Yunus İNAN.
 
 ## 1. Project Title & Overview
 
-**Terabithia Sync — MeetSync Pro** is a high-performance, secure, and low-latency real-time video conferencing, audio communication, screen sharing, and moderation platform built on modern web technologies (.NET 10, ASP.NET Core, SignalR, and WebRTC).
+**MeetSync Pro** is a high-performance, secure, and low-latency real-time video conferencing, audio communication, screen sharing, and moderation platform built on modern web technologies (.NET 10, ASP.NET Core, SignalR, and WebRTC).
 
 ### Problem Solved
-As an alternative to traditional meeting applications requiring heavy desktop clients, expensive server bandwidth costs, and complex licensing; it provides a 100% browser-based (Peer-to-Peer) media streaming architecture with end-to-end encryption and enterprise-grade Clean Architecture.
+As an alternative to traditional meeting applications requiring heavy desktop clients and expensive server bandwidth costs; it provides a 100% browser-based (Peer-to-Peer) media streaming architecture with Clean Architecture standards.
 
 ### Key Value Propositions
 - **Direct Browser Communication**: WebRTC P2P (`RTCPeerConnection`) minimizes server media relay costs.
 - **Real-Time Moderation**: Room locking, remote mute/kick, moderator transfer, and waiting room (lobby) control.
-- **Server-Side Meeting Recording**: Merges and records participant video/audio streams into 1280x720 (720p) WebM format seamlessly.
+- **Meeting Recording**: Chunks participant video/audio streams in 12 KiB slices via browser `MediaRecorder` and uploads to `MeetingRecordingService` to save as 1280x720 (720p) WebM files.
 - **High-Definition Screen Sharing**: Dynamic screen quality selection from 480p up to 4K (UHD 3840x2160).
 
 **Developer**: Yunus İNAN ([GitHub Profile](https://github.com/Terabithia1572))
@@ -384,10 +376,10 @@ The refreshed application interface components and user experience screenshots a
 | ![Moderator Controls](screenshots/moderator-controls.png) | **Moderator Controls**: Mute, kick, room lock, and recording controls. |
 | ![Media Controls](screenshots/media-controls.png) | **Media Toolbar**: Quick mic, camera, and screen share toggle controls. |
 | ![Screen Quality Picker](screenshots/screen-quality-menu.png) | **Quality Selection Panel**: Screen share quality menu (480p, 720p, 1080p, 2K, 4K). |
-| ![Screen Sharing](screenshots/screen-sharing.png) | **Live Screen Sharing**: High FPS live screen stream with compact quality badge. |
+| ![Screen Sharing](screenshots/screen-sharing.png) | **Live Screen Sharing**: Live screen stream with compact quality badge. |
 | ![Meeting Recording](screenshots/meeting-recording.png) | **Meeting Recording**: Live recording indicator, timer, and download link. |
 | ![AI Summary](screenshots/ai-summary.png) | **AI Summary**: Live captions and automated NLP meeting summary. |
-| ![Chat Panel](screenshots/chat.png) | **In-Meeting Chat**: Real-time messaging and attachment sharing panel. |
+| ![Chat Panel](screenshots/chat.png) | **In-Meeting Chat**: Real-time messaging panel. |
 
 ---
 
@@ -404,12 +396,11 @@ The refreshed application interface components and user experience screenshots a
 
 2. **Meeting Recording Engine (MediaRecorder Stream Chunking)**:
    - One-click start/stop triggered by room moderators.
-   - Audio and video streams are chunked in 12 KiB slices and assembled on the server at `wwwroot/recordings` into standard 1280x720 (720p) WebM files.
-   - Preserves fixed recording resolution regardless of client screen share resolution changes.
+   - Audio and video streams are chunked in 12 KiB slices via browser `MediaRecorder` and posted via REST API to `MeetingRecordingService` to save as 1280x720 (720p) WebM files in `wwwroot/recordings`.
    - Provides an instant download link upon recording completion.
 
 3. **Advanced Screen Sharing & Resolution Picker**:
-   - Dynamic WebRTC SDP re-negotiation for on-the-fly resolution switching:
+   - Dynamic resolution switching using `getUserMedia` constraints and `RTCRtpSender.replaceTrack`:
      - **480p**: 854 × 480 @ 30 FPS
      - **720p**: 1280 × 720 @ 30 FPS
      - **1080p**: 1920 × 1080 @ 30 FPS
@@ -595,6 +586,6 @@ dotnet test
 <a name="16-license--copyright-en"></a>
 ## 16. License & Copyright (EN)
 
-This project was developed by **Yunus İNAN** and is released under the **MIT License** provided in Turkish and English. See the [LICENSE](LICENSE) file for details.
+This project was developed by **Yunus İNAN**. See the [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2026 Yunus İNAN.
