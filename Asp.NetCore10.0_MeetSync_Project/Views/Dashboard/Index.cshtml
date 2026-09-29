@@ -114,6 +114,8 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
                         'RequestVerificationToken': token
                     },
                     body: new URLSearchParams({
@@ -123,7 +125,9 @@
                 });
 
                 if (response.ok) {
-                    window.location.href = '/Meeting/Index?roomName=' + encodeURIComponent(roomName);
+                    const result = await response.json();
+                    if (!result.success || !result.redirectUrl) throw new Error(result.error || 'Odaya katılamadınız.');
+                    window.location.href = result.redirectUrl;
                 } else {
                     errorText.textContent = 'Odaya katılamadınız. Lütfen tekrar deneyin.';
                     errorContainer.classList.remove('hidden');

@@ -1,0 +1,14 @@
+Bu paket v4 özelliklerini aynen içerir; yalnızca gereksiz dış klasör kaldırılmıştır.
+
+Ekrandaki 0x800700CE: Microsoft.Data.SqlClient.SNI.dll yüklenirken dosya adı/yolu çok uzun hatasıdır.
+1. Visual Studio'da hata ayıklamayı durdurun ve çözümü kapatın.
+2. Bu ZIP'in içeriğini doğrudan C:\Projects\MeetSync klasörüne çıkarın.
+3. Çözüm şu konumda olmalı: C:\Projects\MeetSync\Asp.NetCore10.0_MeetSync_Project.slnx
+4. Çözümü bu yeni konumdan açın. Eski çözümü Recent Projects üzerinden açmayın.
+5. Web projesini başlangıç projesi seçin. Mevcut SQL Server bağlantı ayarlarınızı kontrol edin.
+6. NuGet paketlerini geri yükleyin, Build > Rebuild Solution seçin ve yeniden çalıştırın.
+
+Paket bin, obj ve .vs içermez; temiz konuma çıkarınca yeniden oluşturulurlar.
+Veritabanını silmeyin. Migration gerekmez. AuthService veya şifreyi değiştirmek gerekmez.
+Kaynak kodda değişiklik yapılmamıştır. DLL derleme çıktısında doğrulandı; sizin IIS Express ortamınızdaki giriş işlemi test edilmedi.
+Hata sürerse çözüm dosyasının tam yolunu ve güncel hata metnini paylaşın.

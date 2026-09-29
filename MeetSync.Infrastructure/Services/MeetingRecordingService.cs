@@ -85,13 +85,13 @@ public class MeetingRecordingService : IMeetingRecordingService
         }
 
         recording.EndedAt = DateTime.UtcNow;
-        recording.DurationSeconds = request.DurationSeconds;
+        recording.DurationSeconds = Math.Max(0, request.DurationSeconds);
 
         if (File.Exists(recording.FilePath))
         {
             var fileInfo = new FileInfo(recording.FilePath);
             recording.FileSize = fileInfo.Length;
-            recording.Status = RecordingStatus.Completed;
+            recording.Status = !request.Failed && fileInfo.Length > 0 ? RecordingStatus.Completed : RecordingStatus.Failed;
         }
         else
         {
@@ -119,7 +119,13 @@ public class MeetingRecordingService : IMeetingRecordingService
     {
         if (chunkData == null || chunkData.Length == 0) return;
 
-        var filePath = Path.Combine(_recordingsFolder, $"{recordingId}.webm");
+        var recording = await _context.Recordings.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == recordingId, cancellationToken);
+        if (recording == null || recording.Status != RecordingStatus.Processing)
+            throw new InvalidOperationException("Recording is not accepting data.");
+        if (chunkData.Length > 12 * 1024)
+            throw new InvalidOperationException("Recording chunk is too large.");
+        var filePath = recording.FilePath;
         await using var fileStream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
         await fileStream.WriteAsync(chunkData, cancellationToken);
     }

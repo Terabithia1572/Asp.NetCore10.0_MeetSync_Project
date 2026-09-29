@@ -1,3 +1,4 @@
+using MeetSync.Domain.Entities;
 using FluentValidation;
 using MeetSync.Application.DTOs.Room;
 using MeetSync.Application.Interfaces;
@@ -29,20 +30,16 @@ public class MeetingService : IMeetingService
             throw new Domain.Exceptions.ValidationException(errorDict);
         }
 
-        var existingRoom = await _roomService.GetRoomByNameAsync(request.RoomName, cancellationToken);
-        if (existingRoom != null)
-        {
-            return existingRoom;
-        }
+        var decodedName = RoomName.Clean(request.RoomName);
 
-        // If room does not exist yet, auto-create it
-        return await _roomService.CreateRoomAsync(new CreateRoomRequestDto(request.RoomName), cancellationToken);
+        return await _roomService.GetOrCreateRoomAsync(decodedName, request.CreatedBy, cancellationToken);
     }
 
     public async Task<bool> CanJoinMeetingAsync(string roomName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(roomName)) return false;
-        var room = await _roomService.GetRoomByNameAsync(roomName, cancellationToken);
+        var decodedName = RoomName.Clean(roomName);
+        var room = await _roomService.GetRoomByNameAsync(decodedName, cancellationToken);
         return room != null && room.IsActive;
     }
 }

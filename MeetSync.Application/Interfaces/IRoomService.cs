@@ -5,6 +5,8 @@ namespace MeetSync.Application.Interfaces;
 public interface IRoomService
 {
     Task<RoomResponseDto> CreateRoomAsync(CreateRoomRequestDto request, CancellationToken cancellationToken = default);
+    Task<RoomResponseDto> GetOrCreateRoomAsync(string name, Guid? createdBy = null, CancellationToken cancellationToken = default);
+    Task<RoomResponseDto> GetOrCreateRoomAsync(CreateRoomRequestDto request, CancellationToken cancellationToken = default);
     Task<RoomResponseDto?> GetRoomByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<RoomResponseDto?> GetRoomByNameAsync(string name, CancellationToken cancellationToken = default);
     Task<bool> DeactivateRoomAsync(Guid id, CancellationToken cancellationToken = default);

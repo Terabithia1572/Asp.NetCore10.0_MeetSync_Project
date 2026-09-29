@@ -1,3 +1,5 @@
+using MeetSync.Domain.Entities;
+using MeetSync.Application.DTOs.Meeting;
 using MeetSync.Application.DTOs.Recording;
 using MeetSync.Application.Interfaces;
 using Microsoft.AspNetCore.SignalR;
@@ -13,6 +15,7 @@ namespace Asp.NetCore10._0_MeetSync_Project.Hubs
         private readonly ITranscriptionService _transcriptionService;
         private readonly IAiSummaryService _aiSummaryService;
         private readonly ILogger<MeetingHub> _logger;
+
 
         public MeetingHub(
             IMeetingStateStore stateStore,
@@ -32,226 +35,279 @@ namespace Asp.NetCore10._0_MeetSync_Project.Hubs
             _logger = logger;
         }
 
-        public async Task JoinRoom(string roomName, string userName, string? password = null)
+        private static string NormalizeRoomName(string? roomName)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(userName))
+            if (string.IsNullOrWhiteSpace(roomName)) return string.Empty;
+            return RoomName.Key(roomName);
+        }
+
+        public async Task<List<ParticipantDto>> JoinRoom(string roomName, string userName, string? password = null)
+        {
+            var normRoomName = RoomName.Clean(roomName);
+            var storeRoomKey = NormalizeRoomName(roomName);
+
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(userName))
             {
                 _logger.LogWarning("JoinRoom invoked with invalid parameters by connection {ConnectionId}", Context.ConnectionId);
-                return;
+                return new List<ParticipantDto>();
             }
 
-            bool isLocked = await _stateStore.IsRoomLockedAsync(roomName);
+            bool isLocked = await _stateStore.IsRoomLockedAsync(storeRoomKey);
             if (isLocked)
             {
                 await Clients.Caller.SendAsync("RoomIsLocked");
-                return;
+                return new List<ParticipantDto>();
             }
 
-            bool isPasswordValid = await _roomService.VerifyPasswordAsync(roomName, password);
+            bool isPasswordValid = await _roomService.VerifyPasswordAsync(normRoomName, password);
             if (!isPasswordValid)
             {
                 await Clients.Caller.SendAsync("InvalidRoomPassword");
-                return;
+                return new List<ParticipantDto>();
             }
 
-            var canJoin = await _meetingService.CanJoinMeetingAsync(roomName);
+            var canJoin = await _meetingService.CanJoinMeetingAsync(normRoomName);
             if (!canJoin)
             {
                 await Clients.Caller.SendAsync("RoomClosedByModerator");
-                return;
+                return new List<ParticipantDto>();
             }
 
-            var room = await _roomService.GetRoomByNameAsync(roomName);
-            var activeParticipants = await _stateStore.GetParticipantsAsync(roomName);
-            bool isFirstParticipant = activeParticipants.Count == 0;
-
-            if (room != null && room.IsLobbyEnabled && !isFirstParticipant)
+            // Joining SignalR must not create a replacement room if the meeting ended.
+            var room = await _roomService.GetRoomByNameAsync(normRoomName);
+            if (room == null)
             {
-                await _stateStore.AddWaitingParticipantAsync(roomName, Context.ConnectionId, userName);
+                await Clients.Caller.SendAsync("RoomClosedByModerator");
+                return new List<ParticipantDto>();
+            }
+            if (room.IsLocked)
+            {
+                await Clients.Caller.SendAsync("RoomIsLocked");
+                return new List<ParticipantDto>();
+            }
+            var activeParticipantsBefore = await _stateStore.GetParticipantsAsync(storeRoomKey);
+            bool isFirstParticipant = activeParticipantsBefore.Count == 0;
+
+            if (room.IsLobbyEnabled && !isFirstParticipant)
+            {
+                await _stateStore.AddWaitingParticipantAsync(storeRoomKey, Context.ConnectionId, userName);
                 await Clients.Caller.SendAsync("PlacedInWaitingRoom");
 
-                var waitingList = await _stateStore.GetWaitingParticipantsAsync(roomName);
-                await Clients.Group(roomName).SendAsync("UserWaitingInLobby", Context.ConnectionId, userName);
-                await Clients.Group(roomName).SendAsync("UpdateWaitingList", waitingList);
-                return;
+                var waitingList = await _stateStore.GetWaitingParticipantsAsync(storeRoomKey);
+                await Clients.Group(storeRoomKey).SendAsync("UserWaitingInLobby", Context.ConnectionId, userName);
+                await Clients.Group(storeRoomKey).SendAsync("UpdateWaitingList", waitingList);
+                return new List<ParticipantDto>();
             }
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, roomName);
-            bool isModerator = await _stateStore.AddParticipantAsync(roomName, Context.ConnectionId, userName);
-            var updatedParticipants = await _stateStore.GetParticipantsAsync(roomName);
+            // 1. Ensure SignalR group registration BEFORE state store addition
+            await Groups.AddToGroupAsync(Context.ConnectionId, storeRoomKey);
 
-            _logger.LogInformation("User {UserName} ({ConnectionId}) joined room '{RoomName}'. Moderator: {IsModerator}",
-                userName, Context.ConnectionId, roomName, isModerator);
+            // 2. Add participant to state store (distinct by Context.ConnectionId)
+            bool isModerator = await _stateStore.AddParticipantAsync(storeRoomKey, Context.ConnectionId, userName);
+            var updatedParticipants = (await _stateStore.GetParticipantsAsync(storeRoomKey)).ToList();
+
+            _logger.LogInformation("[MeetSync System Log] User {UserName} ({ConnectionId}) joined room '{RoomName}'. Moderator: {IsModerator}, Count: {Count}",
+                userName, Context.ConnectionId, storeRoomKey, isModerator, updatedParticipants.Count);
 
             await Clients.Caller.SendAsync("ModeratorStatus", isModerator);
-            await Clients.Group(roomName).SendAsync("UpdateParticipants", updatedParticipants);
-            await Clients.OthersInGroup(roomName).SendAsync("UserJoined", userName, Context.ConnectionId);
+            await Clients.Caller.SendAsync("RoomLockStatusChanged", room.IsLocked);
 
-            var currentWaitingList = await _stateStore.GetWaitingParticipantsAsync(roomName);
+            // 3. Broadcast participant list to group
+            await Clients.Group(storeRoomKey).SendAsync("UpdateParticipantList", updatedParticipants);
+            await Clients.Group(storeRoomKey).SendAsync("UpdateParticipants", updatedParticipants);
+
+            // 4. Notify other participants in group of new arrival
+            await Clients.OthersInGroup(storeRoomKey).SendAsync("UserJoined", userName, Context.ConnectionId);
+
+            var currentWaitingList = await _stateStore.GetWaitingParticipantsAsync(storeRoomKey);
             if (currentWaitingList.Count > 0)
             {
                 await Clients.Caller.SendAsync("UpdateWaitingList", currentWaitingList);
             }
+
+            return updatedParticipants;
         }
 
         // --- AI LIVE CAPTIONS & SUMMARY HUB METHODS ---
 
         public async Task SendTranscriptionChunk(string roomName, string text)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(text)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(text)) return;
 
-            var room = await _roomService.GetRoomByNameAsync(roomName);
+            var room = await _roomService.GetRoomByNameAsync(normRoomName);
             if (room == null) return;
 
-            var participants = await _stateStore.GetParticipantsAsync(roomName);
+            var participants = await _stateStore.GetParticipantsAsync(normRoomName);
             var speaker = participants.FirstOrDefault(p => p.ConnectionId == Context.ConnectionId);
             string speakerName = speaker?.UserName ?? "Participant";
 
             await _transcriptionService.AddTranscriptChunkAsync(room.Id, speakerName, text);
-            await Clients.Group(roomName).SendAsync("ReceiveLiveCaption", speakerName, text);
+            await Clients.Group(normRoomName).SendAsync("ReceiveLiveCaption", speakerName, text);
         }
 
         public async Task GenerateMeetingSummary(string roomName)
         {
-            if (string.IsNullOrWhiteSpace(roomName)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId != Context.ConnectionId) return;
 
-            var room = await _roomService.GetRoomByNameAsync(roomName);
+            var room = await _roomService.GetRoomByNameAsync(normRoomName);
             if (room == null) return;
 
-            _logger.LogInformation("AI Summary generation triggered by moderator for room '{RoomName}'", roomName);
+            _logger.LogInformation("AI Summary generation triggered by moderator for room '{RoomName}'", normRoomName);
 
             var summary = await _aiSummaryService.GenerateSummaryAsync(room.Id);
-            await Clients.Group(roomName).SendAsync("MeetingSummaryReady", summary);
+            await Clients.Group(normRoomName).SendAsync("MeetingSummaryReady", summary);
         }
 
         // --- RECORDING HUB CONTROLS ---
 
-        public async Task StartRecording(string roomName)
+        public async Task<Guid> StartRecording(string roomName)
         {
-            if (string.IsNullOrWhiteSpace(roomName)) return;
-
-            var modId = await _stateStore.GetModeratorAsync(roomName);
-            if (modId != Context.ConnectionId) return;
-
-            var recording = await _recordingService.StartRecordingAsync(new StartRecordingRequestDto(roomName));
-            await Clients.Group(roomName).SendAsync("RecordingStarted", recording.Id);
+            var key = NormalizeRoomName(roomName);
+            if (await _stateStore.GetModeratorAsync(key) != Context.ConnectionId)
+                throw new HubException("Kaydı yalnızca moderatör başlatabilir.");
+            if (Context.Items.ContainsKey("recordingId"))
+                throw new HubException("Önce devam eden kaydı durdurun.");
+            Guid? userId = Guid.TryParse(Context.GetHttpContext()?.Session.GetString("userId"), out var id) ? id : null;
+            var recording = await _recordingService.StartRecordingAsync(new StartRecordingRequestDto(key, userId));
+            Context.Items["recordingId"] = recording.Id;
+            Context.Items["recordingRoom"] = key;
+            await Clients.Group(key).SendAsync("RecordingStarted", recording.Id, Context.ConnectionId);
+            return recording.Id;
         }
 
-        public async Task StopRecording(string roomName, Guid recordingId, int durationSeconds)
+        private void RequireRecordingOwner(string roomName, Guid recordingId)
         {
-            if (string.IsNullOrWhiteSpace(roomName)) return;
+            if (!Context.Items.TryGetValue("recordingId", out var owned) ||
+                owned is not Guid id || id != recordingId ||
+                !Equals(Context.Items["recordingRoom"], NormalizeRoomName(roomName)))
+                throw new HubException("Bu kayıt bu bağlantıya ait değil.");
+        }
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
-            if (modId != Context.ConnectionId) return;
-
-            var result = await _recordingService.StopRecordingAsync(new StopRecordingRequestDto(recordingId, durationSeconds));
-            await Clients.Group(roomName).SendAsync("RecordingStopped", recordingId, result);
+        public async Task StopRecording(string roomName, Guid recordingId, int durationSeconds, bool failed = false)
+        {
+            RequireRecordingOwner(roomName, recordingId);
+            var result = await _recordingService.StopRecordingAsync(new StopRecordingRequestDto(recordingId, durationSeconds, failed));
+            Context.Items.Remove("recordingId");
+            Context.Items.Remove("recordingRoom");
+            await Clients.Group(NormalizeRoomName(roomName)).SendAsync("RecordingStopped", recordingId, result);
         }
 
         public async Task UploadRecordingChunk(string roomName, Guid recordingId, string chunkBase64)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(chunkBase64)) return;
-
-            var modId = await _stateStore.GetModeratorAsync(roomName);
-            if (modId != Context.ConnectionId) return;
-
-            byte[] chunkBytes = Convert.FromBase64String(chunkBase64);
-            await _recordingService.AppendChunkAsync(recordingId, chunkBytes);
+            RequireRecordingOwner(roomName, recordingId);
+            // 12 KiB raw = 16 KiB base64, safely below SignalR's 32 KiB message limit.
+            if (string.IsNullOrEmpty(chunkBase64) || chunkBase64.Length > 16 * 1024)
+                throw new HubException("Geçersiz kayıt parçası.");
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(chunkBase64); }
+            catch (FormatException) { throw new HubException("Geçersiz kayıt verisi."); }
+            await _recordingService.AppendChunkAsync(recordingId, bytes);
         }
 
         // --- LOBBY MANAGEMENT METHODS ---
 
         public async Task ApproveParticipant(string roomName, string targetConnectionId)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId != Context.ConnectionId) return;
 
-            var approved = await _stateStore.ApproveWaitingParticipantAsync(roomName, targetConnectionId);
+            var approved = await _stateStore.ApproveWaitingParticipantAsync(normRoomName, targetConnectionId);
             if (approved != null)
             {
-                await Groups.AddToGroupAsync(targetConnectionId, roomName);
+                await Groups.AddToGroupAsync(targetConnectionId, normRoomName);
                 await Clients.Client(targetConnectionId).SendAsync("LobbyApproved");
 
-                var updatedParticipants = await _stateStore.GetParticipantsAsync(roomName);
-                await Clients.Group(roomName).SendAsync("UpdateParticipants", updatedParticipants);
-                await Clients.OthersInGroup(roomName).SendAsync("UserJoined", approved.UserName, targetConnectionId);
+                var updatedParticipants = await _stateStore.GetParticipantsAsync(normRoomName);
+                await Clients.Group(normRoomName).SendAsync("UpdateParticipantList", updatedParticipants);
+                await Clients.Group(normRoomName).SendAsync("UpdateParticipants", updatedParticipants);
+                await Clients.OthersInGroup(normRoomName).SendAsync("UserJoined", approved.UserName, targetConnectionId);
 
-                var waitingList = await _stateStore.GetWaitingParticipantsAsync(roomName);
-                await Clients.Group(roomName).SendAsync("UpdateWaitingList", waitingList);
+                var waitingList = await _stateStore.GetWaitingParticipantsAsync(normRoomName);
+                await Clients.Group(normRoomName).SendAsync("UpdateWaitingList", waitingList);
             }
         }
 
         public async Task RejectParticipant(string roomName, string targetConnectionId)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId != Context.ConnectionId) return;
 
-            var rejected = await _stateStore.RejectWaitingParticipantAsync(roomName, targetConnectionId);
+            var rejected = await _stateStore.RejectWaitingParticipantAsync(normRoomName, targetConnectionId);
             if (rejected != null)
             {
                 await Clients.Client(targetConnectionId).SendAsync("LobbyRejected");
-                var waitingList = await _stateStore.GetWaitingParticipantsAsync(roomName);
-                await Clients.Group(roomName).SendAsync("UpdateWaitingList", waitingList);
+                var waitingList = await _stateStore.GetWaitingParticipantsAsync(normRoomName);
+                await Clients.Group(normRoomName).SendAsync("UpdateWaitingList", waitingList);
             }
         }
 
         public async Task SetRoomLock(string roomName, bool isLocked)
         {
-            if (string.IsNullOrWhiteSpace(roomName)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
-            if (modId != Context.ConnectionId) return;
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
+            if (modId != Context.ConnectionId) throw new HubException("Oda kilidini yalnızca moderatör değiştirebilir.");
 
-            await _stateStore.SetRoomLockAsync(roomName, isLocked);
-            await _roomService.SetRoomLockAsync(roomName, isLocked);
+            if (!await _roomService.SetRoomLockAsync(normRoomName, isLocked))
+                throw new HubException("Aktif oda bulunamadı.");
+            await _stateStore.SetRoomLockAsync(normRoomName, isLocked);
 
-            await Clients.Group(roomName).SendAsync("RoomLockStatusChanged", isLocked);
+            await Clients.Group(normRoomName).SendAsync("RoomLockStatusChanged", isLocked);
         }
 
         // --- REMOTE PARTICIPANT CONTROL METHODS (HOST COMMANDS) ---
 
         public async Task MuteParticipant(string roomName, string targetConnectionId, string mediaType)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId != Context.ConnectionId) return;
 
             await Clients.Client(targetConnectionId).SendAsync("ParticipantMuted", targetConnectionId, mediaType);
-            await Clients.Group(roomName).SendAsync("ParticipantMutedStateChanged", targetConnectionId, mediaType);
+            await Clients.Group(normRoomName).SendAsync("ParticipantMutedStateChanged", targetConnectionId, mediaType);
         }
 
         public async Task MuteAllParticipants(string roomName, string mediaType)
         {
-            if (string.IsNullOrWhiteSpace(roomName)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId != Context.ConnectionId) return;
 
-            await Clients.OthersInGroup(roomName).SendAsync("AllParticipantsMuted", mediaType);
+            await Clients.OthersInGroup(normRoomName).SendAsync("AllParticipantsMuted", mediaType);
         }
 
         public async Task KickParticipant(string roomName, string targetConnectionId, string reason)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(targetConnectionId)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId != Context.ConnectionId) return;
 
             await Clients.Client(targetConnectionId).SendAsync("ForceKicked", reason ?? "Kicked by meeting moderator.");
-            await Groups.RemoveFromGroupAsync(targetConnectionId, roomName);
+            await Groups.RemoveFromGroupAsync(targetConnectionId, normRoomName);
             await _stateStore.RemoveParticipantAsync(targetConnectionId);
 
-            var participants = await _stateStore.GetParticipantsAsync(roomName);
-            await Clients.Group(roomName).SendAsync("UpdateParticipants", participants);
-            await Clients.Group(roomName).SendAsync("UserDisconnected", targetConnectionId);
+            var participants = await _stateStore.GetParticipantsAsync(normRoomName);
+            await Clients.Group(normRoomName).SendAsync("UpdateParticipantList", participants);
+            await Clients.Group(normRoomName).SendAsync("UpdateParticipants", participants);
+            await Clients.Group(normRoomName).SendAsync("UserDisconnected", targetConnectionId);
         }
 
         // --- EXISTING WEBRTC SIGNALING METHODS ---
@@ -273,52 +329,70 @@ namespace Asp.NetCore10._0_MeetSync_Project.Hubs
 
         public async Task SendMessage(string roomName, string userName, string message)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(message)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(message)) return;
 
-            await Clients.Group(roomName).SendAsync("ReceiveMessage", userName, message);
+            await Clients.Group(normRoomName).SendAsync("ReceiveMessage", userName, message);
         }
 
         public async Task UpdateUserName(string roomName, string newUserName)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(newUserName)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(newUserName)) return;
 
-            await _stateStore.UpdateParticipantNameAsync(roomName, Context.ConnectionId, newUserName);
-            var participants = await _stateStore.GetParticipantsAsync(roomName);
+            await _stateStore.UpdateParticipantNameAsync(normRoomName, Context.ConnectionId, newUserName);
+            var participants = await _stateStore.GetParticipantsAsync(normRoomName);
 
-            await Clients.Group(roomName).SendAsync("UserNameUpdated", Context.ConnectionId, newUserName);
-            await Clients.Group(roomName).SendAsync("UpdateParticipants", participants);
+            await Clients.Group(normRoomName).SendAsync("UserNameUpdated", Context.ConnectionId, newUserName);
+            await Clients.Group(normRoomName).SendAsync("UpdateParticipantList", participants);
+            await Clients.Group(normRoomName).SendAsync("UpdateParticipants", participants);
         }
 
         public async Task AssignModerator(string roomName, string newModeratorConnectionId)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(newModeratorConnectionId)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName) || string.IsNullOrWhiteSpace(newModeratorConnectionId)) return;
 
-            await _stateStore.SetModeratorAsync(roomName, newModeratorConnectionId);
-            var participants = await _stateStore.GetParticipantsAsync(roomName);
+            await _stateStore.SetModeratorAsync(normRoomName, newModeratorConnectionId);
+            var participants = await _stateStore.GetParticipantsAsync(normRoomName);
 
-            _logger.LogInformation("Moderator reassigned in room '{RoomName}' to {NewModeratorConnectionId}", roomName, newModeratorConnectionId);
+            _logger.LogInformation("Moderator reassigned in room '{RoomName}' to {NewModeratorConnectionId}", normRoomName, newModeratorConnectionId);
 
-            await Clients.Group(roomName).SendAsync("ModeratorChanged", newModeratorConnectionId);
-            await Clients.Group(roomName).SendAsync("UpdateParticipants", participants);
+            await Clients.Group(normRoomName).SendAsync("ModeratorChanged", newModeratorConnectionId);
+            await Clients.Group(normRoomName).SendAsync("UpdateParticipantList", participants);
+            await Clients.Group(normRoomName).SendAsync("UpdateParticipants", participants);
             await Clients.Client(newModeratorConnectionId).SendAsync("ModeratorStatus", true);
         }
 
         public async Task EndMeeting(string roomName)
         {
-            if (string.IsNullOrWhiteSpace(roomName)) return;
+            var normRoomName = NormalizeRoomName(roomName);
+            if (string.IsNullOrWhiteSpace(normRoomName)) return;
 
-            var modId = await _stateStore.GetModeratorAsync(roomName);
+            var modId = await _stateStore.GetModeratorAsync(normRoomName);
             if (modId == Context.ConnectionId)
             {
-                _logger.LogInformation("Room '{RoomName}' closed by moderator {ConnectionId}", roomName, Context.ConnectionId);
+                _logger.LogInformation("Room '{RoomName}' closed by moderator {ConnectionId}", normRoomName, Context.ConnectionId);
 
-                await Clients.Group(roomName).SendAsync("RoomClosedByModerator");
-                await _stateStore.RemoveRoomAsync(roomName);
+                var room = await _roomService.GetRoomByNameAsync(normRoomName);
+                if (room != null) await _roomService.DeactivateRoomAsync(room.Id);
+                await Clients.Group(normRoomName).SendAsync("RoomClosedByModerator");
+                await _stateStore.RemoveRoomAsync(normRoomName);
             }
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            if (Context.Items.TryGetValue("recordingId", out var owned) && owned is Guid recordingId)
+            {
+                try
+                {
+                    var failed = await _recordingService.StopRecordingAsync(new StopRecordingRequestDto(recordingId, 0, true));
+                    await Clients.Group((string)Context.Items["recordingRoom"]!).SendAsync("RecordingStopped", recordingId, failed);
+                }
+                catch (Exception ex) { _logger.LogError(ex, "Could not finalize disconnected recording {RecordingId}", recordingId); }
+            }
+
             var roomName = await _stateStore.GetParticipantRoomAsync(Context.ConnectionId);
 
             var (removedParticipant, promotedNewMod, newMod, roomIsEmpty) =
@@ -326,23 +400,25 @@ namespace Asp.NetCore10._0_MeetSync_Project.Hubs
 
             if (removedParticipant != null && !string.IsNullOrEmpty(roomName))
             {
+                var normRoomName = NormalizeRoomName(roomName);
                 _logger.LogInformation("User {UserName} ({ConnectionId}) disconnected from room '{RoomName}'.",
-                    removedParticipant.UserName, Context.ConnectionId, roomName);
+                    removedParticipant.UserName, Context.ConnectionId, normRoomName);
 
                 if (promotedNewMod && newMod != null)
                 {
-                    _logger.LogInformation("Promoted new moderator {NewModId} for room '{RoomName}'.", newMod.ConnectionId, roomName);
-                    await Clients.Group(roomName).SendAsync("ModeratorChanged", newMod.ConnectionId);
+                    _logger.LogInformation("Promoted new moderator {NewModId} for room '{RoomName}'.", newMod.ConnectionId, normRoomName);
+                    await Clients.Group(normRoomName).SendAsync("ModeratorChanged", newMod.ConnectionId);
                     await Clients.Client(newMod.ConnectionId).SendAsync("ModeratorStatus", true);
                 }
 
                 if (!roomIsEmpty)
                 {
-                    var remainingParticipants = await _stateStore.GetParticipantsAsync(roomName);
-                    await Clients.Group(roomName).SendAsync("UpdateParticipants", remainingParticipants);
+                    var remainingParticipants = await _stateStore.GetParticipantsAsync(normRoomName);
+                    await Clients.Group(normRoomName).SendAsync("UpdateParticipantList", remainingParticipants);
+                    await Clients.Group(normRoomName).SendAsync("UpdateParticipants", remainingParticipants);
                 }
 
-                await Clients.Group(roomName).SendAsync("UserDisconnected", Context.ConnectionId);
+                await Clients.Group(normRoomName).SendAsync("UserDisconnected", Context.ConnectionId);
             }
 
             await base.OnDisconnectedAsync(exception);

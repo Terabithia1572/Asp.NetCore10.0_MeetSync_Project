@@ -1,3 +1,4 @@
+using MeetSync.Domain.Entities;
 using System.Text.Json;
 using MeetSync.Application.DTOs.Meeting;
 using MeetSync.Application.Interfaces;
@@ -24,31 +25,39 @@ public class RedisMeetingStateStore : IMeetingStateStore
         _fallbackStore = new InMemoryMeetingStateStore();
     }
 
-    private static string GetRoomKey(string roomName) => $"meetsync:room:{roomName}:participants";
-    private static string GetWaitingKey(string roomName) => $"meetsync:room:{roomName}:waiting";
+
+    private static string NormalizeRoomName(string? roomName)
+    {
+        if (string.IsNullOrWhiteSpace(roomName)) return string.Empty;
+        return RoomName.Key(roomName);
+    }
+
+    private static string GetRoomKey(string roomName) => $"meetsync:room:{NormalizeRoomName(roomName)}:participants";
+    private static string GetWaitingKey(string roomName) => $"meetsync:room:{NormalizeRoomName(roomName)}:waiting";
     private static string GetConnKey(string connectionId) => $"meetsync:conn:{connectionId}:room";
-    private static string GetLockKey(string roomName) => $"meetsync:room:{roomName}:lock";
+    private static string GetLockKey(string roomName) => $"meetsync:room:{NormalizeRoomName(roomName)}:lock";
 
     public async Task<bool> AddParticipantAsync(string roomName, string connectionId, string userName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var participants = (await GetParticipantsAsync(roomName, cancellationToken)).ToList();
+            var participants = (await GetParticipantsAsync(normRoom, cancellationToken)).ToList();
             bool isModerator = participants.Count == 0;
 
             var newParticipant = new ParticipantDto(connectionId, userName, isModerator);
             participants.RemoveAll(p => p.ConnectionId == connectionId);
             participants.Add(newParticipant);
 
-            await _cache.SetStringAsync(GetRoomKey(roomName), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
-            await _cache.SetStringAsync(GetConnKey(connectionId), roomName, DefaultCacheOptions, cancellationToken);
+            await _cache.SetStringAsync(GetRoomKey(normRoom), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
+            await _cache.SetStringAsync(GetConnKey(connectionId), normRoom, DefaultCacheOptions, cancellationToken);
 
             return isModerator;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during AddParticipantAsync. Falling back to in-memory store.");
-            return await _fallbackStore.AddParticipantAsync(roomName, connectionId, userName, cancellationToken);
+            return await _fallbackStore.AddParticipantAsync(normRoom, connectionId, userName, cancellationToken);
         }
     }
 
@@ -62,9 +71,10 @@ public class RedisMeetingStateStore : IMeetingStateStore
                 return (null, false, null, false);
             }
 
+            var normRoom = NormalizeRoomName(roomName);
             await _cache.RemoveAsync(GetConnKey(connectionId), cancellationToken);
 
-            var participants = (await GetParticipantsAsync(roomName, cancellationToken)).ToList();
+            var participants = (await GetParticipantsAsync(normRoom, cancellationToken)).ToList();
             var removed = participants.FirstOrDefault(p => p.ConnectionId == connectionId);
             if (removed == null)
             {
@@ -87,13 +97,13 @@ public class RedisMeetingStateStore : IMeetingStateStore
 
             if (roomIsEmpty)
             {
-                await _cache.RemoveAsync(GetRoomKey(roomName), cancellationToken);
-                await _cache.RemoveAsync(GetWaitingKey(roomName), cancellationToken);
-                await _cache.RemoveAsync(GetLockKey(roomName), cancellationToken);
+                await _cache.RemoveAsync(GetRoomKey(normRoom), cancellationToken);
+                await _cache.RemoveAsync(GetWaitingKey(normRoom), cancellationToken);
+                await _cache.RemoveAsync(GetLockKey(normRoom), cancellationToken);
             }
             else
             {
-                await _cache.SetStringAsync(GetRoomKey(roomName), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
+                await _cache.SetStringAsync(GetRoomKey(normRoom), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
             }
 
             return (removed, promotedNewMod, newMod, roomIsEmpty);
@@ -107,9 +117,10 @@ public class RedisMeetingStateStore : IMeetingStateStore
 
     public async Task<IReadOnlyList<ParticipantDto>> GetParticipantsAsync(string roomName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var json = await _cache.GetStringAsync(GetRoomKey(roomName), cancellationToken);
+            var json = await _cache.GetStringAsync(GetRoomKey(normRoom), cancellationToken);
             if (string.IsNullOrEmpty(json)) return Array.Empty<ParticipantDto>();
             var list = JsonSerializer.Deserialize<List<ParticipantDto>>(json);
             return list ?? (IReadOnlyList<ParticipantDto>)Array.Empty<ParticipantDto>();
@@ -117,7 +128,7 @@ public class RedisMeetingStateStore : IMeetingStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during GetParticipantsAsync. Falling back to in-memory store.");
-            return await _fallbackStore.GetParticipantsAsync(roomName, cancellationToken);
+            return await _fallbackStore.GetParticipantsAsync(normRoom, cancellationToken);
         }
     }
 
@@ -136,62 +147,66 @@ public class RedisMeetingStateStore : IMeetingStateStore
 
     public async Task SetModeratorAsync(string roomName, string newModeratorConnectionId, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var participants = (await GetParticipantsAsync(roomName, cancellationToken)).ToList();
+            var participants = (await GetParticipantsAsync(normRoom, cancellationToken)).ToList();
             for (int i = 0; i < participants.Count; i++)
             {
                 var p = participants[i];
                 participants[i] = p with { IsModerator = (p.ConnectionId == newModeratorConnectionId) };
             }
 
-            await _cache.SetStringAsync(GetRoomKey(roomName), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
+            await _cache.SetStringAsync(GetRoomKey(normRoom), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during SetModeratorAsync. Falling back to in-memory store.");
-            await _fallbackStore.SetModeratorAsync(roomName, newModeratorConnectionId, cancellationToken);
+            await _fallbackStore.SetModeratorAsync(normRoom, newModeratorConnectionId, cancellationToken);
         }
     }
 
     public async Task<string?> GetModeratorAsync(string roomName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var participants = await GetParticipantsAsync(roomName, cancellationToken);
+            var participants = await GetParticipantsAsync(normRoom, cancellationToken);
             return participants.FirstOrDefault(p => p.IsModerator)?.ConnectionId;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during GetModeratorAsync. Falling back to in-memory store.");
-            return await _fallbackStore.GetModeratorAsync(roomName, cancellationToken);
+            return await _fallbackStore.GetModeratorAsync(normRoom, cancellationToken);
         }
     }
 
     public async Task UpdateParticipantNameAsync(string roomName, string connectionId, string newUserName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var participants = (await GetParticipantsAsync(roomName, cancellationToken)).ToList();
+            var participants = (await GetParticipantsAsync(normRoom, cancellationToken)).ToList();
             var index = participants.FindIndex(p => p.ConnectionId == connectionId);
             if (index >= 0)
             {
                 participants[index] = participants[index] with { UserName = newUserName };
-                await _cache.SetStringAsync(GetRoomKey(roomName), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
+                await _cache.SetStringAsync(GetRoomKey(normRoom), JsonSerializer.Serialize(participants), DefaultCacheOptions, cancellationToken);
             }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during UpdateParticipantNameAsync. Falling back to in-memory store.");
-            await _fallbackStore.UpdateParticipantNameAsync(roomName, connectionId, newUserName, cancellationToken);
+            await _fallbackStore.UpdateParticipantNameAsync(normRoom, connectionId, newUserName, cancellationToken);
         }
     }
 
     public async Task<IReadOnlyList<string>> RemoveRoomAsync(string roomName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var participants = await GetParticipantsAsync(roomName, cancellationToken);
+            var participants = await GetParticipantsAsync(normRoom, cancellationToken);
             var connectionIds = participants.Select(p => p.ConnectionId).ToList();
 
             foreach (var connId in connectionIds)
@@ -199,41 +214,43 @@ public class RedisMeetingStateStore : IMeetingStateStore
                 await _cache.RemoveAsync(GetConnKey(connId), cancellationToken);
             }
 
-            await _cache.RemoveAsync(GetRoomKey(roomName), cancellationToken);
-            await _cache.RemoveAsync(GetWaitingKey(roomName), cancellationToken);
-            await _cache.RemoveAsync(GetLockKey(roomName), cancellationToken);
+            await _cache.RemoveAsync(GetRoomKey(normRoom), cancellationToken);
+            await _cache.RemoveAsync(GetWaitingKey(normRoom), cancellationToken);
+            await _cache.RemoveAsync(GetLockKey(normRoom), cancellationToken);
 
             return connectionIds;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during RemoveRoomAsync. Falling back to in-memory store.");
-            return await _fallbackStore.RemoveRoomAsync(roomName, cancellationToken);
+            return await _fallbackStore.RemoveRoomAsync(normRoom, cancellationToken);
         }
     }
 
     public async Task AddWaitingParticipantAsync(string roomName, string connectionId, string userName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var waiting = (await GetWaitingParticipantsAsync(roomName, cancellationToken)).ToList();
+            var waiting = (await GetWaitingParticipantsAsync(normRoom, cancellationToken)).ToList();
             waiting.RemoveAll(w => w.ConnectionId == connectionId);
             waiting.Add(new ParticipantDto(connectionId, userName, false));
 
-            await _cache.SetStringAsync(GetWaitingKey(roomName), JsonSerializer.Serialize(waiting), DefaultCacheOptions, cancellationToken);
+            await _cache.SetStringAsync(GetWaitingKey(normRoom), JsonSerializer.Serialize(waiting), DefaultCacheOptions, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during AddWaitingParticipantAsync. Falling back to in-memory store.");
-            await _fallbackStore.AddWaitingParticipantAsync(roomName, connectionId, userName, cancellationToken);
+            await _fallbackStore.AddWaitingParticipantAsync(normRoom, connectionId, userName, cancellationToken);
         }
     }
 
     public async Task<IReadOnlyList<ParticipantDto>> GetWaitingParticipantsAsync(string roomName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var json = await _cache.GetStringAsync(GetWaitingKey(roomName), cancellationToken);
+            var json = await _cache.GetStringAsync(GetWaitingKey(normRoom), cancellationToken);
             if (string.IsNullOrEmpty(json)) return Array.Empty<ParticipantDto>();
             var list = JsonSerializer.Deserialize<List<ParticipantDto>>(json);
             return list ?? (IReadOnlyList<ParticipantDto>)Array.Empty<ParticipantDto>();
@@ -241,21 +258,22 @@ public class RedisMeetingStateStore : IMeetingStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during GetWaitingParticipantsAsync. Falling back to in-memory store.");
-            return await _fallbackStore.GetWaitingParticipantsAsync(roomName, cancellationToken);
+            return await _fallbackStore.GetWaitingParticipantsAsync(normRoom, cancellationToken);
         }
     }
 
     public async Task<ParticipantDto?> ApproveWaitingParticipantAsync(string roomName, string connectionId, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var waiting = (await GetWaitingParticipantsAsync(roomName, cancellationToken)).ToList();
+            var waiting = (await GetWaitingParticipantsAsync(normRoom, cancellationToken)).ToList();
             var participant = waiting.FirstOrDefault(w => w.ConnectionId == connectionId);
             if (participant != null)
             {
                 waiting.Remove(participant);
-                await _cache.SetStringAsync(GetWaitingKey(roomName), JsonSerializer.Serialize(waiting), DefaultCacheOptions, cancellationToken);
-                await AddParticipantAsync(roomName, connectionId, participant.UserName, cancellationToken);
+                await _cache.SetStringAsync(GetWaitingKey(normRoom), JsonSerializer.Serialize(waiting), DefaultCacheOptions, cancellationToken);
+                await AddParticipantAsync(normRoom, connectionId, participant.UserName, cancellationToken);
                 return participant;
             }
             return null;
@@ -263,20 +281,21 @@ public class RedisMeetingStateStore : IMeetingStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during ApproveWaitingParticipantAsync. Falling back to in-memory store.");
-            return await _fallbackStore.ApproveWaitingParticipantAsync(roomName, connectionId, cancellationToken);
+            return await _fallbackStore.ApproveWaitingParticipantAsync(normRoom, connectionId, cancellationToken);
         }
     }
 
     public async Task<ParticipantDto?> RejectWaitingParticipantAsync(string roomName, string connectionId, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var waiting = (await GetWaitingParticipantsAsync(roomName, cancellationToken)).ToList();
+            var waiting = (await GetWaitingParticipantsAsync(normRoom, cancellationToken)).ToList();
             var participant = waiting.FirstOrDefault(w => w.ConnectionId == connectionId);
             if (participant != null)
             {
                 waiting.Remove(participant);
-                await _cache.SetStringAsync(GetWaitingKey(roomName), JsonSerializer.Serialize(waiting), DefaultCacheOptions, cancellationToken);
+                await _cache.SetStringAsync(GetWaitingKey(normRoom), JsonSerializer.Serialize(waiting), DefaultCacheOptions, cancellationToken);
                 return participant;
             }
             return null;
@@ -284,34 +303,36 @@ public class RedisMeetingStateStore : IMeetingStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during RejectWaitingParticipantAsync. Falling back to in-memory store.");
-            return await _fallbackStore.RejectWaitingParticipantAsync(roomName, connectionId, cancellationToken);
+            return await _fallbackStore.RejectWaitingParticipantAsync(normRoom, connectionId, cancellationToken);
         }
     }
 
     public async Task SetRoomLockAsync(string roomName, bool isLocked, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            await _cache.SetStringAsync(GetLockKey(roomName), isLocked.ToString(), DefaultCacheOptions, cancellationToken);
+            await _cache.SetStringAsync(GetLockKey(normRoom), isLocked.ToString(), DefaultCacheOptions, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during SetRoomLockAsync. Falling back to in-memory store.");
-            await _fallbackStore.SetRoomLockAsync(roomName, isLocked, cancellationToken);
+            await _fallbackStore.SetRoomLockAsync(normRoom, isLocked, cancellationToken);
         }
     }
 
     public async Task<bool> IsRoomLockedAsync(string roomName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         try
         {
-            var val = await _cache.GetStringAsync(GetLockKey(roomName), cancellationToken);
+            var val = await _cache.GetStringAsync(GetLockKey(normRoom), cancellationToken);
             return bool.TryParse(val, out var isLocked) && isLocked;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Redis cache failure during IsRoomLockedAsync. Falling back to in-memory store.");
-            return await _fallbackStore.IsRoomLockedAsync(roomName, cancellationToken);
+            return await _fallbackStore.IsRoomLockedAsync(normRoom, cancellationToken);
         }
     }
 }

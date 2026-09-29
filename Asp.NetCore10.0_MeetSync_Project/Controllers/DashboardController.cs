@@ -1,3 +1,4 @@
+using MeetSync.Domain.Entities;
 using MeetSync.Application.DTOs.Room;
 using MeetSync.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -36,11 +37,18 @@ namespace Asp.NetCore10._0_MeetSync_Project.Controllers
                 return View("Index");
             }
 
-            var room = await _meetingService.PrepareMeetingRoomAsync(request, cancellationToken);
+            var decodedRoomName = RoomName.Clean(request.RoomName);
+            Guid? userId = Guid.TryParse(HttpContext.Session.GetString("userId"), out var id) ? id : null;
+            var cleanRequest = request with { RoomName = decodedRoomName, CreatedBy = userId };
+
+            var room = await _meetingService.PrepareMeetingRoomAsync(cleanRequest, cancellationToken);
+
+            ViewBag.RoomId = room.Id;
+            ViewBag.RoomName = room.Name;
 
             if (isAjax)
             {
-                return Json(new { success = true, redirectUrl = $"/Meeting/Index?roomName={Uri.EscapeDataString(room.Name)}" });
+                return Json(new { success = true, redirectUrl = $"/Meeting/Index?roomName={Uri.EscapeDataString(room.Name)}", roomId = room.Id });
             }
 
             return RedirectToAction("Index", "Meeting", new { roomName = room.Name });

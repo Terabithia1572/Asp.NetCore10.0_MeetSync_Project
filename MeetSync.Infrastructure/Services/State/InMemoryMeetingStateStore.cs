@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MeetSync.Domain.Entities;
 using MeetSync.Application.DTOs.Meeting;
 using MeetSync.Application.Interfaces;
 
@@ -12,10 +13,18 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
     private readonly ConcurrentDictionary<string, string> _connectionRooms = new();
     private readonly ConcurrentDictionary<string, bool> _roomLocks = new();
 
+
+    private static string NormalizeRoomName(string? roomName)
+    {
+        if (string.IsNullOrWhiteSpace(roomName)) return string.Empty;
+        return RoomName.Key(roomName);
+    }
+
     public Task<bool> AddParticipantAsync(string roomName, string connectionId, string userName, CancellationToken cancellationToken = default)
     {
-        var roomMap = _roomParticipants.GetOrAdd(roomName, _ => new ConcurrentDictionary<string, ParticipantDto>());
-        _connectionRooms[connectionId] = roomName;
+        var normRoom = NormalizeRoomName(roomName);
+        var roomMap = _roomParticipants.GetOrAdd(normRoom, _ => new ConcurrentDictionary<string, ParticipantDto>());
+        _connectionRooms[connectionId] = normRoom;
 
         bool isModerator;
         lock (roomMap)
@@ -23,7 +32,7 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
             isModerator = roomMap.IsEmpty;
             if (isModerator)
             {
-                _roomModerators[roomName] = connectionId;
+                _roomModerators[normRoom] = connectionId;
             }
 
             var participant = new ParticipantDto(connectionId, userName, isModerator);
@@ -81,7 +90,8 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
 
     public Task<IReadOnlyList<ParticipantDto>> GetParticipantsAsync(string roomName, CancellationToken cancellationToken = default)
     {
-        if (_roomParticipants.TryGetValue(roomName, out var roomMap))
+        var normRoom = NormalizeRoomName(roomName);
+        if (_roomParticipants.TryGetValue(normRoom, out var roomMap))
         {
             return Task.FromResult<IReadOnlyList<ParticipantDto>>(roomMap.Values.ToList());
         }
@@ -97,7 +107,8 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
 
     public Task SetModeratorAsync(string roomName, string newModeratorConnectionId, CancellationToken cancellationToken = default)
     {
-        if (_roomParticipants.TryGetValue(roomName, out var roomMap))
+        var normRoom = NormalizeRoomName(roomName);
+        if (_roomParticipants.TryGetValue(normRoom, out var roomMap))
         {
             lock (roomMap)
             {
@@ -106,7 +117,7 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
                     var updated = kvp.Value with { IsModerator = (kvp.Key == newModeratorConnectionId) };
                     roomMap[kvp.Key] = updated;
                 }
-                _roomModerators[roomName] = newModeratorConnectionId;
+                _roomModerators[normRoom] = newModeratorConnectionId;
             }
         }
 
@@ -115,13 +126,15 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
 
     public Task<string?> GetModeratorAsync(string roomName, CancellationToken cancellationToken = default)
     {
-        _roomModerators.TryGetValue(roomName, out var modId);
+        var normRoom = NormalizeRoomName(roomName);
+        _roomModerators.TryGetValue(normRoom, out var modId);
         return Task.FromResult(modId);
     }
 
     public Task UpdateParticipantNameAsync(string roomName, string connectionId, string newUserName, CancellationToken cancellationToken = default)
     {
-        if (_roomParticipants.TryGetValue(roomName, out var roomMap))
+        var normRoom = NormalizeRoomName(roomName);
+        if (_roomParticipants.TryGetValue(normRoom, out var roomMap))
         {
             if (roomMap.TryGetValue(connectionId, out var existing))
             {
@@ -134,13 +147,14 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
 
     public Task<IReadOnlyList<string>> RemoveRoomAsync(string roomName, CancellationToken cancellationToken = default)
     {
+        var normRoom = NormalizeRoomName(roomName);
         var connectionIds = new List<string>();
 
-        if (_roomParticipants.TryRemove(roomName, out var roomMap))
+        if (_roomParticipants.TryRemove(normRoom, out var roomMap))
         {
-            _roomModerators.TryRemove(roomName, out _);
-            _waitingParticipants.TryRemove(roomName, out _);
-            _roomLocks.TryRemove(roomName, out _);
+            _roomModerators.TryRemove(normRoom, out _);
+            _waitingParticipants.TryRemove(normRoom, out _);
+            _roomLocks.TryRemove(normRoom, out _);
 
             lock (roomMap)
             {
@@ -158,14 +172,16 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
     // Lobby / Waiting Room Implementations
     public Task AddWaitingParticipantAsync(string roomName, string connectionId, string userName, CancellationToken cancellationToken = default)
     {
-        var waitingMap = _waitingParticipants.GetOrAdd(roomName, _ => new ConcurrentDictionary<string, ParticipantDto>());
+        var normRoom = NormalizeRoomName(roomName);
+        var waitingMap = _waitingParticipants.GetOrAdd(normRoom, _ => new ConcurrentDictionary<string, ParticipantDto>());
         waitingMap[connectionId] = new ParticipantDto(connectionId, userName, false);
         return Task.CompletedTask;
     }
 
     public Task<IReadOnlyList<ParticipantDto>> GetWaitingParticipantsAsync(string roomName, CancellationToken cancellationToken = default)
     {
-        if (_waitingParticipants.TryGetValue(roomName, out var waitingMap))
+        var normRoom = NormalizeRoomName(roomName);
+        if (_waitingParticipants.TryGetValue(normRoom, out var waitingMap))
         {
             return Task.FromResult<IReadOnlyList<ParticipantDto>>(waitingMap.Values.ToList());
         }
@@ -175,12 +191,13 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
 
     public Task<ParticipantDto?> ApproveWaitingParticipantAsync(string roomName, string connectionId, CancellationToken cancellationToken = default)
     {
-        if (_waitingParticipants.TryGetValue(roomName, out var waitingMap))
+        var normRoom = NormalizeRoomName(roomName);
+        if (_waitingParticipants.TryGetValue(normRoom, out var waitingMap))
         {
             if (waitingMap.TryRemove(connectionId, out var participant))
             {
-                var roomMap = _roomParticipants.GetOrAdd(roomName, _ => new ConcurrentDictionary<string, ParticipantDto>());
-                _connectionRooms[connectionId] = roomName;
+                var roomMap = _roomParticipants.GetOrAdd(normRoom, _ => new ConcurrentDictionary<string, ParticipantDto>());
+                _connectionRooms[connectionId] = normRoom;
                 roomMap[connectionId] = participant;
                 return Task.FromResult<ParticipantDto?>(participant);
             }
@@ -191,7 +208,8 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
 
     public Task<ParticipantDto?> RejectWaitingParticipantAsync(string roomName, string connectionId, CancellationToken cancellationToken = default)
     {
-        if (_waitingParticipants.TryGetValue(roomName, out var waitingMap))
+        var normRoom = NormalizeRoomName(roomName);
+        if (_waitingParticipants.TryGetValue(normRoom, out var waitingMap))
         {
             if (waitingMap.TryRemove(connectionId, out var participant))
             {
@@ -205,13 +223,15 @@ public class InMemoryMeetingStateStore : IMeetingStateStore
     // Room Lock Implementations
     public Task SetRoomLockAsync(string roomName, bool isLocked, CancellationToken cancellationToken = default)
     {
-        _roomLocks[roomName] = isLocked;
+        var normRoom = NormalizeRoomName(roomName);
+        _roomLocks[normRoom] = isLocked;
         return Task.CompletedTask;
     }
 
     public Task<bool> IsRoomLockedAsync(string roomName, CancellationToken cancellationToken = default)
     {
-        _roomLocks.TryGetValue(roomName, out var isLocked);
+        var normRoom = NormalizeRoomName(roomName);
+        _roomLocks.TryGetValue(normRoom, out var isLocked);
         return Task.FromResult(isLocked);
     }
 }

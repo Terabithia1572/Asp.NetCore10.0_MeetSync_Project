@@ -7,14 +7,12 @@ const connection = new signalR.HubConnectionBuilder()
 
 let localStream;
 let peerConnections = {};
+let pendingIceCandidates = {};
 let isModerator = false;
 let isRoomLocked = false;
 const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-// Recording state
-let mediaRecorder = null;
-let currentRecordingId = null;
-let recordingStartTime = null;
+// Recording and screen sharing are managed by meeting-media.js.
 
 // Speech Recognition (Web Speech API)
 let speechRecognition = null;
@@ -25,6 +23,18 @@ let allParticipants = [];
 let waitingParticipants = [];
 window.isModerator = false;
 window.myConnectionId = null;
+
+// Room Key Standardization (Case-Insensitive & Trimmed & Decoded)
+function getCleanRoomName() {
+    let raw = (typeof window !== "undefined" && window.currentRoomName) ? window.currentRoomName : (typeof roomName !== "undefined" ? roomName : "");
+    if (!raw || typeof raw !== "string") return "";
+    return normalizeRoomKey(raw);
+}
+
+// The server applies Turkish casing; the browser sends the canonical DB name.
+function normalizeRoomKey(value) {
+    return typeof value === "string" ? value.trim().normalize("NFC") : "";
+}
 
 async function init() {
     // 1. Acquire local media stream safely with fallbacks
@@ -41,13 +51,13 @@ async function init() {
         const localVidEl = document.getElementById("localVideo");
         if (localVidEl) localVidEl.srcObject = localStream;
     } catch (mediaErr) {
-        console.warn("Full video+audio media acquisition failed:", mediaErr);
+        console.warn("[MeetSync System Log] Full video+audio media acquisition failed:", mediaErr);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const localVidEl = document.getElementById("localVideo");
             if (localVidEl) localVidEl.srcObject = localStream;
         } catch (audioErr) {
-            console.warn("Audio-only media acquisition failed. Fallback to empty MediaStream:", audioErr);
+            console.warn("[MeetSync System Log] Audio-only media acquisition failed. Fallback to empty MediaStream:", audioErr);
             localStream = new MediaStream();
         }
     }
@@ -58,14 +68,29 @@ async function init() {
             await connection.start();
         }
         window.myConnectionId = connection.connectionId;
-        console.log(`SignalR connection established successfully. ConnectionId: ${window.myConnectionId}`);
+        console.log(`[MeetSync System Log] SignalR connection established successfully. ConnectionId: ${window.myConnectionId}`);
 
+        const activeRoomName = getCleanRoomName();
         const roomPassword = new URLSearchParams(window.location.search).get("pwd") || "";
-        await connection.invoke("JoinRoom", roomName, userName, roomPassword);
+        const participants = await connection.invoke("JoinRoom", activeRoomName, userName, roomPassword);
+
+        console.log("[MeetSync System Log] Room Joined:", activeRoomName, "Current Users Count:", participants ? participants.length : 0);
+
+        if (Array.isArray(participants) && participants.length > 0) {
+            updateParticipantListUI(participants);
+
+            // Automatically trigger WebRTC peer creation for every existing active participant
+            for (const p of participants) {
+                if (p.connectionId && p.connectionId !== window.myConnectionId) {
+                    console.log(`[MeetSync System Log] Setting up WebRTC peer connection to existing participant ${p.userName} (${p.connectionId})`);
+                    createPeerConnection(p.connectionId, p.userName);
+                }
+            }
+        }
 
         initSpeechRecognition();
     } catch (err) {
-        console.error("Failed to start SignalR connection or JoinRoom:", err);
+        console.error("[MeetSync System Log] Failed to start SignalR connection or JoinRoom:", err);
     }
 }
 
@@ -79,31 +104,72 @@ function updateBtnUI(id, state, icon) {
     }
 }
 
+function getParticipantName(remoteId) {
+    const p = allParticipants.find(x => x.connectionId === remoteId);
+    return p ? p.userName : "Katılımcı";
+}
+
+function queueIceCandidate(remoteId, candidate) {
+    if (!pendingIceCandidates[remoteId]) {
+        pendingIceCandidates[remoteId] = [];
+    }
+    pendingIceCandidates[remoteId].push(candidate);
+}
+
+async function flushIceCandidates(remoteId, pc) {
+    const queued = pendingIceCandidates[remoteId] || [];
+    if (pc.iceCandidatesQueue && pc.iceCandidatesQueue.length > 0) {
+        queued.push(...pc.iceCandidatesQueue);
+        pc.iceCandidatesQueue = [];
+    }
+
+    if (queued.length > 0) {
+        console.log(`Flushing ${queued.length} buffered ICE candidates for peer ${remoteId}`);
+        for (const candidate of queued) {
+            try {
+                await pc.addIceCandidate(candidate);
+            } catch (err) {
+                console.warn(`Error adding queued ICE candidate for peer ${remoteId}:`, err);
+            }
+        }
+        pendingIceCandidates[remoteId] = [];
+    }
+}
+
 function createPeerConnection(remoteId, remoteName) {
     if (peerConnections[remoteId]) {
         return peerConnections[remoteId];
     }
 
+    const displayName = remoteName || getParticipantName(remoteId);
     const pc = new RTCPeerConnection(servers);
     pc.iceCandidatesQueue = [];
     peerConnections[remoteId] = pc;
 
     if (localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
+        const video = isSharing ? screenStream?.getVideoTracks()[0] : localStream.getVideoTracks()[0];
+        if (video) pc.addTrack(video, isSharing ? screenStream : localStream);
+        else pc.addTransceiver("video", { direction: "sendrecv" });
     }
 
+    pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") applySenderQuality(pc).catch(error => console.warn("Video quality:", error));
+    };
     pc.onicecandidate = e => {
         if (e.candidate) {
-            connection.invoke("SendIceCandidate", JSON.stringify(e.candidate), remoteId).catch(err => console.error("SendIceCandidate error:", err));
+            connection.invoke("SendIceCandidate", JSON.stringify(e.candidate), remoteId)
+                .catch(err => console.error("SendIceCandidate error:", err));
         }
     };
-    pc.ontrack = e => addRemoteVideoUI(remoteId, remoteName, e.streams[0]);
+    pc.ontrack = e => addRemoteVideoUI(remoteId, displayName, e.streams[0]);
 
     return pc;
 }
 
 function addRemoteVideoUI(remoteId, remoteName, stream) {
-    if (document.getElementById(`container-${remoteId}`)) return;
+    const existingVideo = document.getElementById("video-" + remoteId);
+    if (existingVideo) { existingVideo.srcObject = stream; return; }
 
     const grid = document.getElementById("video-grid");
 
@@ -236,18 +302,21 @@ function updateWaitingListUI(waitingList) {
 connection.on("ModeratorStatus", status => {
     isModerator = status;
     window.isModerator = status;
+    updateModeratorControls();
 
-    document.getElementById('btn-end-meeting')?.classList.toggle('hidden', !status);
-    document.getElementById('btn-lock-room')?.classList.toggle('hidden', !status);
-    document.getElementById('btn-rec')?.classList.toggle('hidden', !status);
-    document.getElementById('btn-ai-summary')?.classList.toggle('hidden', !status);
 
     if (allParticipants.length > 0) {
         updateParticipantListUI(allParticipants);
     }
 });
 
+connection.on("UpdateParticipantList", participants => {
+    console.log(`[MeetSync System Log] UpdateParticipantList event received. Count: ${participants ? participants.length : 0}`);
+    updateParticipantListUI(participants);
+});
+
 connection.on("UpdateParticipants", participants => {
+    console.log(`[MeetSync System Log] UpdateParticipants event received. Count: ${participants ? participants.length : 0}`);
     updateParticipantListUI(participants);
 });
 
@@ -256,7 +325,7 @@ connection.on("UpdateWaitingList", waitingList => {
 });
 
 connection.on("UserWaitingInLobby", (connectionId, userName) => {
-    console.log(`User waiting in lobby: ${userName} (${connectionId})`);
+    console.log(`[MeetSync System Log] User waiting in lobby: ${userName} (${connectionId})`);
 });
 
 connection.on("PlacedInWaitingRoom", () => {
@@ -265,9 +334,10 @@ connection.on("PlacedInWaitingRoom", () => {
 
 connection.on("LobbyApproved", async () => {
     hideWaitingRoomModal();
+    const activeRoomName = getCleanRoomName();
     const roomPassword = new URLSearchParams(window.location.search).get("pwd") || "";
     if (connection.state === signalR.HubConnectionState.Connected) {
-        await connection.invoke("JoinRoom", roomName, userName, roomPassword);
+        await connection.invoke("JoinRoom", activeRoomName, userName, roomPassword);
     }
 });
 
@@ -325,14 +395,15 @@ function initSpeechRecognition() {
     speechRecognition = new SpeechRecognition();
     speechRecognition.continuous = true;
     speechRecognition.interimResults = false;
-    speechRecognition.lang = "tr-TR"; // Default language Turkish (can be customized)
+    speechRecognition.lang = "tr-TR"; // Default language Turkish
 
     speechRecognition.onresult = (event) => {
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
                 const transcriptText = event.results[i][0].transcript;
                 if (transcriptText && transcriptText.trim() !== "") {
-                    connection.invoke("SendTranscriptionChunk", roomName, transcriptText.trim()).catch(err => console.error(err));
+                    const currentRoomName = normalizeRoomKey(roomName);
+                    connection.invoke("SendTranscriptionChunk", currentRoomName, transcriptText.trim()).catch(err => console.error(err));
                 }
             }
         }
@@ -364,14 +435,15 @@ function toggleClosedCaptions() {
             alert("Canlı Altyazı (CC) kapatıldı.");
         }
     } else {
-        alert("Tarayıcınız Web Speech API canlı altyazı özelliğini desteklemiyor.");
+        alert("Tarayıcınız Web Speech API canlı altyazı mevcudiyetini desteklemiyor.");
     }
 }
 
 function generateAiSummary() {
     if (!window.isModerator) return;
     alert("Yapay Zeka toplantı özeti ve aksiyon maddeleri oluşturuluyor...");
-    connection.invoke("GenerateMeetingSummary", roomName).catch(err => console.error(err));
+    const currentRoomName = normalizeRoomKey(roomName);
+    connection.invoke("GenerateMeetingSummary", currentRoomName).catch(err => console.error(err));
 }
 
 function renderAiSummaryModal(summary) {
@@ -408,69 +480,7 @@ function closeAiSummaryModal() {
     document.getElementById("aiSummaryModal")?.classList.add("hidden");
 }
 
-// Recording Events
-connection.on("RecordingStarted", recordingId => {
-    currentRecordingId = recordingId;
-    recordingStartTime = Date.now();
-
-    document.getElementById("rec-badge")?.classList.remove("hidden");
-    const recBtn = document.getElementById("btn-rec");
-    if (recBtn) recBtn.classList.add("is-on");
-
-    if (window.isModerator) {
-        startMediaRecorder(recordingId);
-    }
-});
-
-connection.on("RecordingStopped", (recordingId, summary) => {
-    document.getElementById("rec-badge")?.classList.add("hidden");
-    const recBtn = document.getElementById("btn-rec");
-    if (recBtn) recBtn.classList.remove("is-on");
-
-    if (window.isModerator && mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-    }
-    currentRecordingId = null;
-    alert(`Toplantı kaydı tamamlandı. Süre: ${summary?.durationSeconds || 0} saniye.`);
-});
-
-function startMediaRecorder(recordingId) {
-    try {
-        const stream = document.getElementById("localVideo")?.srcObject || localStream;
-        if (!stream) return;
-
-        const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
-            ? "video/webm;codecs=vp8,opus"
-            : "video/webm";
-
-        mediaRecorder = new MediaRecorder(stream, { mimeType });
-
-        mediaRecorder.ondataavailable = async (e) => {
-            if (e.data && e.data.size > 0 && currentRecordingId) {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64data = reader.result.split(',')[1];
-                    connection.invoke("UploadRecordingChunk", roomName, recordingId, base64data).catch(err => console.error(err));
-                };
-                reader.readAsDataURL(e.data);
-            }
-        };
-
-        mediaRecorder.start(3000);
-    } catch (err) {
-        console.error("MediaRecorder start error:", err);
-    }
-}
-
-function toggleRecording() {
-    if (!currentRecordingId) {
-        connection.invoke("StartRecording", roomName).catch(err => console.error(err));
-    } else {
-        const duration = Math.round((Date.now() - (recordingStartTime || Date.now())) / 1000);
-        connection.invoke("StopRecording", roomName, currentRecordingId, duration).catch(err => console.error(err));
-    }
-}
-
+// Multi-Peer WebRTC Signaling Events
 connection.on("UserJoined", async (name, id) => {
     console.log(`UserJoined event received for ${name} (${id})`);
     try {
@@ -492,13 +502,8 @@ connection.on("ReceiveOffer", async (offer, id) => {
         const pc = createPeerConnection(id, remoteName);
         await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer)));
 
-        // Flush any ICE candidates queued before remote description was set
-        if (pc.iceCandidatesQueue && pc.iceCandidatesQueue.length > 0) {
-            for (const cand of pc.iceCandidatesQueue) {
-                await pc.addIceCandidate(cand).catch(e => console.warn("Queued ICE candidate error:", e));
-            }
-            pc.iceCandidatesQueue = [];
-        }
+        // Flush queued ICE candidates after remote description is applied
+        await flushIceCandidates(id, pc);
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -514,14 +519,8 @@ connection.on("ReceiveAnswer", async (ans, id) => {
         const pc = peerConnections[id];
         if (pc) {
             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(ans)));
-
-            // Flush any ICE candidates queued before remote description was set
-            if (pc.iceCandidatesQueue && pc.iceCandidatesQueue.length > 0) {
-                for (const cand of pc.iceCandidatesQueue) {
-                    await pc.addIceCandidate(cand).catch(e => console.warn("Queued ICE candidate error:", e));
-                }
-                pc.iceCandidatesQueue = [];
-            }
+            // Flush queued ICE candidates after remote description is applied
+            await flushIceCandidates(id, pc);
         }
     } catch (err) {
         console.error("Error handling ReceiveAnswer:", err);
@@ -532,11 +531,12 @@ connection.on("ReceiveIceCandidate", async (can, id) => {
     try {
         const candidate = new RTCIceCandidate(JSON.parse(can));
         const pc = peerConnections[id];
+
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
             await pc.addIceCandidate(candidate);
-        } else if (pc) {
-            if (!pc.iceCandidatesQueue) pc.iceCandidatesQueue = [];
-            pc.iceCandidatesQueue.push(candidate);
+        } else {
+            // Buffer candidate if peerConnection is not yet ready or remoteDescription is not set
+            queueIceCandidate(id, candidate);
         }
     } catch (err) {
         console.error("Error adding ICE candidate:", err);
@@ -546,6 +546,7 @@ connection.on("ReceiveIceCandidate", async (can, id) => {
 connection.on("UserDisconnected", id => {
     document.getElementById(`container-${id}`)?.remove();
     delete peerConnections[id];
+    delete pendingIceCandidates[id];
 });
 
 connection.on("RoomClosedByModerator", () => {
@@ -558,15 +559,12 @@ connection.on("UserNameUpdated", (id, name) => {
 });
 
 connection.on("ModeratorChanged", newModConnectionId => {
-    if (newModConnectionId === window.myConnectionId) {
-        window.isModerator = true;
-        isModerator = true;
-        document.getElementById('btn-end-meeting')?.classList.remove('hidden');
-        document.getElementById('btn-lock-room')?.classList.remove('hidden');
-        document.getElementById('btn-rec')?.classList.remove('hidden');
-        document.getElementById('btn-ai-summary')?.classList.remove('hidden');
-        alert("Toplantının yeni moderatörü sizsiniz.");
-    }
+    const wasModerator = window.isModerator;
+    isModerator = newModConnectionId === window.myConnectionId;
+    window.isModerator = isModerator;
+    updateModeratorControls();
+    if (allParticipants.length) updateParticipantListUI(allParticipants);
+    if (isModerator && !wasModerator) mediaNotice("Toplantının yeni moderatörü sizsiniz.");
 });
 
 // Remote Moderation Events
@@ -601,40 +599,28 @@ connection.on("ForceKicked", reason => {
     window.location.href = "/Dashboard";
 });
 
-connection.on("RoomLockStatusChanged", isLocked => {
-    isRoomLocked = isLocked;
-    const lockBtn = document.getElementById("btn-lock-room");
-    if (lockBtn) {
-        lockBtn.classList.toggle("is-on", isLocked);
-        lockBtn.classList.toggle("is-off", !isLocked);
-        lockBtn.title = isLocked ? "Oda Kilitli (Açmak için tıklayın)" : "Oda Kilitsiz (Kilitlemek için tıklayın)";
-    }
-    alert(isLocked ? "Oda moderatör tarafından kilitlendi." : "Oda kilidi kaldırıldı.");
-});
-
 // Moderator Actions
 function muteParticipant(targetId, mediaType) {
-    connection.invoke("MuteParticipant", roomName, targetId, mediaType).catch(err => console.error(err));
+    const currentRoomName = normalizeRoomKey(roomName);
+    connection.invoke("MuteParticipant", currentRoomName, targetId, mediaType).catch(err => console.error(err));
 }
 
 function kickParticipant(targetId) {
     const reason = prompt("Çıkarma sebebini belirtin:", "Moderatör kararı.");
     if (reason !== null) {
-        connection.invoke("KickParticipant", roomName, targetId, reason).catch(err => console.error(err));
+        const currentRoomName = normalizeRoomKey(roomName);
+        connection.invoke("KickParticipant", currentRoomName, targetId, reason).catch(err => console.error(err));
     }
 }
 
 function approveParticipant(targetId) {
-    connection.invoke("ApproveParticipant", roomName, targetId).catch(err => console.error(err));
+    const currentRoomName = normalizeRoomKey(roomName);
+    connection.invoke("ApproveParticipant", currentRoomName, targetId).catch(err => console.error(err));
 }
 
 function rejectParticipant(targetId) {
-    connection.invoke("RejectParticipant", roomName, targetId).catch(err => console.error(err));
-}
-
-function toggleRoomLock() {
-    const newLockState = !isRoomLocked;
-    connection.invoke("SetRoomLock", roomName, newLockState).catch(err => console.error(err));
+    const currentRoomName = normalizeRoomKey(roomName);
+    connection.invoke("RejectParticipant", currentRoomName, targetId).catch(err => console.error(err));
 }
 
 function changeMyName() {
@@ -642,13 +628,18 @@ function changeMyName() {
     if (newName && newName.trim() !== "") {
         userName = newName.trim();
         document.getElementById("local-name-label").textContent = userName.toUpperCase() + " (SİZ)";
-        connection.invoke("UpdateUserName", roomName, userName).catch(err => console.error(err));
+        const currentRoomName = normalizeRoomKey(roomName);
+        connection.invoke("UpdateUserName", currentRoomName, userName).catch(err => console.error(err));
     }
 }
 
 document.getElementById("btn-send-chat").onclick = () => {
     const inp = document.getElementById("chat-input");
-    if (inp.value) { connection.invoke("SendMessage", roomName, userName, inp.value); inp.value = ""; }
+    if (inp.value) {
+        const currentRoomName = normalizeRoomKey(roomName);
+        connection.invoke("SendMessage", currentRoomName, userName, inp.value);
+        inp.value = "";
+    }
 };
 
 connection.on("ReceiveMessage", (user, msg) => {
@@ -689,45 +680,32 @@ function hideWaitingRoomModal() {
 
 // Mic / Cam Toggles
 document.getElementById("btn-mic").onclick = function () {
-    const state = !localStream.getAudioTracks()[0].enabled;
-    localStream.getAudioTracks()[0].enabled = state;
+    const track = localStream?.getAudioTracks()[0];
+    if (!track) { mediaNotice("Mikrofon bulunamadı veya izin verilmedi.", true); return; }
+    const state = !track.enabled;
+    track.enabled = state;
     updateBtnUI("btn-mic", state, 'mic');
 };
 
 document.getElementById("btn-cam").onclick = function () {
-    const state = !localStream.getVideoTracks()[0].enabled;
-    localStream.getVideoTracks()[0].enabled = state;
+    const track = localStream?.getVideoTracks()[0];
+    if (!track) { mediaNotice("Kamera bulunamadı veya izin verilmedi.", true); return; }
+    const state = !track.enabled;
+    track.enabled = state;
     updateBtnUI("btn-cam", state, 'videocam');
 };
 
-// Screen Share
-let isSharing = false;
-document.getElementById("btn-share").onclick = async function () {
-    if (!isSharing) {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const track = stream.getVideoTracks()[0];
-        for (let id in peerConnections) peerConnections[id].getSenders().find(s => s.track.kind === 'video').replaceTrack(track);
-        document.getElementById("localVideo").srcObject = stream;
-        track.onended = () => stopShare();
-        isSharing = true;
-    } else { stopShare(); }
-};
-
-function stopShare() {
-    const track = localStream.getVideoTracks()[0];
-    for (let id in peerConnections) peerConnections[id].getSenders().find(s => s.track.kind === 'video').replaceTrack(track);
-    document.getElementById("localVideo").srcObject = localStream;
-    isSharing = false;
-}
-
-function endMeetingConfirm() {
+async function endMeetingConfirm() {
     if (confirm("Toplantıyı herkes için sonlandırmak istediğinize emin misiniz?")) {
-        connection.invoke("EndMeeting", roomName).catch(err => console.error(err));
+        const currentRoomName = normalizeRoomKey(roomName);
+        if (!await finishRecordingBeforeLeaving()) return;
+        await connection.invoke("EndMeeting", currentRoomName);
         window.location.href = '/Dashboard';
     }
 }
 
-function leaveMeeting() {
+async function leaveMeeting() {
+    if (!await finishRecordingBeforeLeaving()) return;
     if (window.isModerator && allParticipants.length > 1) {
         showModeratorModal(allParticipants);
     } else {
@@ -735,13 +713,14 @@ function leaveMeeting() {
     }
 }
 
-function showModeratorModal(participants) {
+async function showModeratorModal(participants) {
     const modal = document.getElementById('moderatorModal');
     const candidates = document.getElementById('moderatorCandidates');
     const others = participants.filter(p => p.connectionId !== window.myConnectionId);
 
     if (others.length === 0) {
-        connection.invoke("EndMeeting", roomName).catch(err => console.error(err));
+        const currentRoomName = normalizeRoomKey(roomName);
+        connection.invoke("EndMeeting", currentRoomName).catch(err => console.error(err));
         window.location.href = '/Dashboard';
         return;
     }
@@ -763,8 +742,10 @@ function showModeratorModal(participants) {
     modal.classList.remove('hidden');
 }
 
-function assignModerator(connectionId) {
-    connection.invoke("AssignModerator", roomName, connectionId).catch(err => console.error(err));
+async function assignModerator(connectionId) {
+    if (!await finishRecordingBeforeLeaving()) return;
+    const currentRoomName = normalizeRoomKey(roomName);
+    await connection.invoke("AssignModerator", currentRoomName, connectionId);
     document.getElementById('moderatorModal').classList.add('hidden');
     window.location.href = '/Dashboard';
 }
@@ -773,4 +754,5 @@ function cancelLeave() {
     document.getElementById('moderatorModal').classList.add('hidden');
 }
 
+initializeMeetingMedia();
 init();

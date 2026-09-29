@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Meeting recordings
+wwwroot/recordings/*.webm
+Asp.NetCore10.0_MeetSync_Project/wwwroot/recordings/*.webm
